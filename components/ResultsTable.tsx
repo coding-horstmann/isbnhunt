@@ -1,7 +1,7 @@
 import React from 'react';
 import { ExternalLink, ArrowRight } from 'lucide-react';
-import { ArbitrageDeal } from '../lib/types';
-import { formatCurrency, cn } from '../lib/utils';
+import { ArbitrageDeal } from '@/types';
+import { formatCurrency, cn } from '@/lib/utils';
 import { Button } from './ui/Button';
 
 interface ResultsTableProps {

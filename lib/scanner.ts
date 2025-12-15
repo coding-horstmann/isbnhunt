@@ -1,5 +1,5 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import { ArbitrageDeal } from './types';
+import { ArbitrageDeal } from '@/types';
 
 /**
  * ORCHESTRATOR

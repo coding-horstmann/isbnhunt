@@ -1,6 +1,6 @@
 import React from 'react';
 import { LayoutDashboard, Search, Settings, TrendingUp, Menu, X } from 'lucide-react';
-import { cn } from '../lib/utils';
+import { cn } from '@/lib/utils';
 
 interface LayoutProps {
   children: React.ReactNode;

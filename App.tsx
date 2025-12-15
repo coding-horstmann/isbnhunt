@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
-import { Layout } from './components/Layout';
-import { Button } from './components/ui/Button';
+import { Layout } from '@/components/Layout';
+import { Button } from '@/components/ui/Button';
 import { Search, ArrowRight, DollarSign, Package, TrendingUp, AlertCircle, Code, Info, Server, Sparkles } from 'lucide-react';
-import { formatCurrency } from './lib/utils';
-import { scanDeals } from './lib/scanner';
-import { ResultsTable } from './components/ResultsTable';
-import type { DashboardStats, ArbitrageDeal } from './types';
+import { formatCurrency } from '@/lib/utils';
+import { scanDeals } from '@/lib/scanner';
+import { ResultsTable } from '@/components/ResultsTable';
+import type { DashboardStats, ArbitrageDeal } from '@/types';
 
 // Placeholder Stats Component
 const StatsCard = ({ title, value, icon: Icon, trend }: { title: string, value: string, icon: any, trend?: string }) => (
