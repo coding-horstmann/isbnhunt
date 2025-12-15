@@ -9,9 +9,11 @@ import { ArbitrageDeal } from './types';
  *    - Works if running a full Next.js local server.
  * 
  * 2. If API fails (e.g. 404, Network Error, or client-side only env),
- *    falls back to Gemini AI Simulation.
+ *    falls back to Gemini AI Simulation (nur wenn useAI=true).
+ * 
+ * @param useAI - Wenn true, wird bei API-Fehler Gemini AI verwendet. Wenn false, wird leeres Array zurückgegeben.
  */
-export const scanDeals = async (): Promise<ArbitrageDeal[]> => {
+export const scanDeals = async (useAI: boolean = false): Promise<ArbitrageDeal[]> => {
   
   // --- STRATEGY 1: REAL SERVER SCRAPING ---
   try {
@@ -20,7 +22,7 @@ export const scanDeals = async (): Promise<ArbitrageDeal[]> => {
     // We set a short timeout because if the API route doesn't exist (client-only preview),
     // we don't want to wait forever.
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 8000); // 8s timeout
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout für echte Scans
 
     const response = await fetch('/api/scan', { 
       signal: controller.signal,
@@ -31,21 +33,31 @@ export const scanDeals = async (): Promise<ArbitrageDeal[]> => {
 
     if (response.ok) {
       const data = await response.json();
-      if (Array.isArray(data) && data.length > 0) {
-        console.log("Client: Successfully fetched real data from server API");
+      if (Array.isArray(data)) {
+        console.log(`Client: Successfully fetched ${data.length} deals from server API`);
         // Convert string dates back to Date objects if necessary
-        return data.map(d => ({...d, timestamp: new Date(d.timestamp)}));
+        return data.map(d => ({
+          ...d, 
+          timestamp: d.timestamp ? new Date(d.timestamp) : new Date()
+        }));
       }
     } else {
-      console.warn("Client: /api/scan endpoint not found or error. Status:", response.status);
+      const errorData = await response.json().catch(() => ({}));
+      console.warn("Client: /api/scan endpoint error. Status:", response.status, errorData);
     }
   } catch (e) {
-    console.warn("Client: Could not reach backend API (likely running in client-only mode).");
+    console.warn("Client: Could not reach backend API:", e);
   }
 
-  // --- STRATEGY 2: AI SIMULATION (Fallback) ---
-  console.log("Client: Falling back to AI Simulation...");
-  return scanWithAI();
+  // --- STRATEGY 2: AI SIMULATION (Fallback nur wenn aktiviert) ---
+  if (useAI) {
+    console.log("Client: Falling back to AI Simulation...");
+    return scanWithAI();
+  }
+  
+  // Wenn KI deaktiviert und API fehlgeschlagen, leeres Array zurückgeben
+  console.log("Client: API failed and AI is disabled. Returning empty array.");
+  return [];
 };
 
 // ... Internal AI Logic (Moved to helper function) ...

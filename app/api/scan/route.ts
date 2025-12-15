@@ -1,78 +1,135 @@
 import { NextResponse } from 'next/server';
-import { scrapeRealVinted, scrapeRealEbay } from '../../../lib/scrapers';
-import { ArbitrageDeal } from '../../../lib/types';
+import { scrapeVintedCatalogUrl } from '../../../lib/scrapers';
+import { searchEbayByTitle, getEbaySearchUrl } from '../../../lib/ebay-api';
+import { ArbitrageDeal } from '../../../types';
+import vintedUrls from '../../../config/vinted-urls.json';
 
 // This function runs on the SERVER (Node.js environment)
 // It bypasses CORS restrictions that exist in the browser.
 export async function GET() {
   try {
-    // 1. Define what to search for (random selection to avoid timeouts)
-    const searchQueries = [
-      { term: "Pokemon Smaragd Edition", cat: "Video Games" },
-      { term: "One Piece Manga Set", cat: "Manga" },
-      { term: "Clean Code Robert Martin", cat: "Books" }
-    ];
-    
-    // Pick one random category to scrape to keep execution time low (Vercel Limit)
-    const query = searchQueries[Math.floor(Math.random() * searchQueries.length)];
-    
-    console.log(`Server: Scraping for ${query.term}...`);
-
-    // 2. Run Scrapers in Parallel
-    const [vintedItems, ebayItems] = await Promise.all([
-      scrapeRealVinted(query.term),
-      scrapeRealEbay(query.term)
-    ]);
-
-    // 3. Find Arbitrage Deals
     const deals: ArbitrageDeal[] = [];
+    
+    // eBay API Konfiguration aus Umgebungsvariablen
+    const ebayConfig = {
+      appId: process.env.EBAY_APP_ID || '',
+      certId: process.env.EBAY_CERT_ID,
+      devId: process.env.EBAY_DEV_ID,
+      authToken: process.env.EBAY_AUTH_TOKEN,
+      siteId: process.env.EBAY_SITE_ID || '77', // 77 = Deutschland
+      apiVersion: (process.env.EBAY_API_VERSION as 'finding' | 'browse') || 'finding'
+    };
 
-    // Simple matching algorithm
-    // In a real app, you would need fuzzy string matching
-    if (vintedItems.length > 0 && ebayItems.length > 0) {
-      // Calculate median eBay price as reference
-      const sortedEbayPrices = ebayItems.map((i: any) => i.price).sort((a: number, b: number) => a - b);
-      const medianEbayPrice = sortedEbayPrices[Math.floor(sortedEbayPrices.length / 2)] || 0;
-
-      vintedItems.forEach((vItem: any, index: number) => {
-        // Only consider if price is significantly lower than eBay median
-        if (vItem.price < medianEbayPrice * 0.7) { 
-          const fees = medianEbayPrice * 0.11;
-          const shipping = 4.50;
-          const profit = medianEbayPrice - vItem.price - fees - shipping;
-
-          if (profit > 5) { // Min 5€ profit
-             deals.push({
-               id: `real-${Date.now()}-${index}`,
-               vinted: {
-                 id: `v-${index}`,
-                 title: vItem.title,
-                 price: vItem.price,
-                 url: vItem.url,
-                 condition: 'Gebraucht',
-                 imageUrl: vItem.imageUrl || 'https://placehold.co/400?text=No+Image',
-                 category: query.cat
-               },
-               ebay: {
-                 price: medianEbayPrice,
-                 url: `https://www.ebay.de/sch/i.html?_nkw=${encodeURIComponent(query.term)}&LH_Sold=1`,
-                 title: `~ ${medianEbayPrice}€ Market Value`
-               },
-               profit: medianEbayPrice - vItem.price,
-               profitAfterFees: profit,
-               roi: (profit / vItem.price) * 100,
-               timestamp: new Date(),
-               status: 'new'
-             });
-          }
-        }
-      });
+    // Prüfe ob eBay API konfiguriert ist
+    if (!ebayConfig.appId) {
+      console.warn('eBay API nicht konfiguriert. Setze EBAY_APP_ID in Umgebungsvariablen.');
     }
 
+    // Alle aktivierten Vinted URLs durchgehen
+    const enabledUrls = vintedUrls.urls.filter((u: any) => u.enabled);
+    
+    if (enabledUrls.length === 0) {
+      return NextResponse.json({ 
+        error: 'Keine aktivierten Vinted URLs gefunden. Bitte config/vinted-urls.json prüfen.' 
+      }, { status: 400 });
+    }
+
+    // Für jede konfigurierte URL
+    for (const urlConfig of enabledUrls) {
+      try {
+        console.log(`Scraping Vinted: ${urlConfig.name}...`);
+        
+        // Vinted Katalog scrappen
+        const vintedItems = await scrapeVintedCatalogUrl(urlConfig.url);
+        
+        console.log(`Gefunden: ${vintedItems.length} Artikel auf Vinted`);
+        
+        // Limit für Vercel Timeout (max 10 Items pro URL)
+        const itemsToProcess = vintedItems.slice(0, 10);
+        
+        // Für jedes Vinted Item eBay abfragen
+        for (const vItem of itemsToProcess) {
+          try {
+            let ebayResult = null;
+            
+            // eBay API verwenden wenn konfiguriert
+            if (ebayConfig.appId) {
+              ebayResult = await searchEbayByTitle(
+                vItem.title,
+                vItem.condition,
+                ebayConfig
+              );
+            }
+            
+            // Wenn keine eBay API oder kein Ergebnis, Fallback URL generieren
+            if (!ebayResult) {
+              const searchUrl = getEbaySearchUrl(vItem.title, vItem.condition);
+              // Für Fallback: Preis als 0 setzen, wird später gefiltert
+              ebayResult = {
+                price: 0,
+                url: searchUrl,
+                title: vItem.title
+              };
+            }
+            
+            // Arbitrage-Berechnung nur wenn eBay Preis verfügbar
+            if (ebayResult.price > 0 && ebayResult.price > vItem.price * 1.2) {
+              const fees = ebayResult.price * 0.11; // eBay Gebühren ~11%
+              const shipping = 4.50; // Geschätzter Versand
+              const profitAfterFees = ebayResult.price - vItem.price - fees - shipping;
+              
+              // Mindestprofit: 5€
+              if (profitAfterFees > 5) {
+                deals.push({
+                  id: `deal-${Date.now()}-${deals.length}`,
+                  vinted: {
+                    id: `v-${deals.length}`,
+                    title: vItem.title,
+                    price: vItem.price,
+                    url: vItem.url,
+                    condition: vItem.condition,
+                    imageUrl: vItem.imageUrl || 'https://placehold.co/400?text=No+Image',
+                    category: urlConfig.category || 'Unbekannt'
+                  },
+                  ebay: {
+                    price: ebayResult.price,
+                    url: ebayResult.url,
+                    title: ebayResult.title
+                  },
+                  profit: ebayResult.price - vItem.price,
+                  profitAfterFees,
+                  roi: (profitAfterFees / vItem.price) * 100,
+                  timestamp: new Date(),
+                  status: 'new'
+                });
+              }
+            }
+            
+            // Rate Limiting zwischen eBay API Calls
+            if (ebayConfig.appId) {
+              await new Promise(resolve => setTimeout(resolve, 500));
+            }
+          } catch (itemError) {
+            console.error(`Fehler bei Item "${vItem.title}":`, itemError);
+            // Weiter mit nächstem Item
+            continue;
+          }
+        }
+      } catch (urlError) {
+        console.error(`Fehler beim Scrapen von ${urlConfig.name}:`, urlError);
+        // Weiter mit nächster URL
+        continue;
+      }
+    }
+
+    console.log(`Gefunden: ${deals.length} Arbitrage-Möglichkeiten`);
     return NextResponse.json(deals);
     
   } catch (error) {
     console.error("API Route Error:", error);
-    return NextResponse.json({ error: "Failed to scrape on server" }, { status: 500 });
+    return NextResponse.json({ 
+      error: "Failed to scrape", 
+      details: error instanceof Error ? error.message : 'Unknown error'
+    }, { status: 500 });
   }
 }

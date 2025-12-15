@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Layout } from './components/Layout';
 import { Button } from './components/ui/Button';
-import { Search, ArrowRight, DollarSign, Package, TrendingUp, AlertCircle, Code, Info, Server } from 'lucide-react';
+import { Search, ArrowRight, DollarSign, Package, TrendingUp, AlertCircle, Code, Info, Server, Sparkles } from 'lucide-react';
 import { formatCurrency } from './lib/utils';
 import { scanDeals } from './lib/scanner';
 import { ResultsTable } from './components/ResultsTable';
@@ -28,6 +28,7 @@ const App: React.FC = () => {
   const [deals, setDeals] = useState<ArbitrageDeal[]>([]);
   const [showCodeInfo, setShowCodeInfo] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [useAI, setUseAI] = useState(false); // KI/Gemini Toggle
   
   const totalPotentialProfit = deals.reduce((acc, deal) => acc + (deal.profitAfterFees > 0 ? deal.profitAfterFees : 0), 0);
   const avgRoi = deals.length > 0 ? deals.reduce((acc, deal) => acc + deal.roi, 0) / deals.length : 0;
@@ -36,8 +37,11 @@ const App: React.FC = () => {
     setIsSearching(true);
     setError(null);
     try {
-      const foundDeals = await scanDeals();
+      const foundDeals = await scanDeals(useAI);
       setDeals(foundDeals);
+      if (foundDeals.length === 0 && !useAI) {
+        setError("Keine Deals gefunden. Versuche KI-Fallback zu aktivieren.");
+      }
     } catch (err) {
       console.error(err);
       setError("Scan error. Please try again.");
@@ -55,6 +59,15 @@ const App: React.FC = () => {
           <p className="text-slate-400 mt-1">Vinted vs eBay Arbitrage Analysis</p>
         </div>
         <div className="flex gap-3">
+           <Button 
+             variant={useAI ? "default" : "outline"} 
+             size="sm" 
+             onClick={() => setUseAI(!useAI)}
+             className={useAI ? "bg-purple-600 hover:bg-purple-700" : ""}
+           >
+             <Sparkles className={`mr-2 h-4 w-4 ${useAI ? 'text-white' : 'text-slate-400'}`} />
+             {useAI ? 'KI: AN' : 'KI: AUS'}
+           </Button>
            <Button variant="outline" size="sm" onClick={() => setShowCodeInfo(!showCodeInfo)}>
              <Server className="mr-2 h-4 w-4" />
              Scraper Status
@@ -87,7 +100,7 @@ const App: React.FC = () => {
                  </div>
                  <div className="bg-slate-950 p-3 rounded border border-slate-800">
                     <div className="text-xs font-mono text-blue-400 mb-1">STRATEGY 2: AI Fallback</div>
-                    <p className="text-xs text-slate-400">If API fails (CORS/Offline), falls back to <strong>Gemini AI Simulation</strong> to generate realistic mock deals for demonstration.</p>
+                    <p className="text-xs text-slate-400">If API fails (CORS/Offline), falls back to <strong>Gemini AI Simulation</strong> to generate realistic mock deals for demonstration. <strong>KI-Toggle:</strong> {useAI ? 'AKTIVIERT' : 'DEAKTIVIERT'}</p>
                  </div>
               </div>
             </div>

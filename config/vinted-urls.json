@@ -1,0 +1,12 @@
+{
+  "urls": [
+    {
+      "id": "sachbuecher-all",
+      "name": "Sachbücher (Sehr gut, Neu, Neu mit Etikett)",
+      "url": "https://www.vinted.de/catalog?catalog[]=2320&status_ids[]=1&status_ids[]=2&status_ids[]=6&order=newest_first",
+      "category": "Bücher & Medien - Sachbücher",
+      "enabled": true
+    }
+  ]
+}
+
