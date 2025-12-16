@@ -46,21 +46,22 @@ export async function GET(request: Request) {
       }, { status: 400 });
     }
 
+    // Seitenlimit aus Umgebungsvariable oder Default (3)
+    const maxPages = parseInt(process.env.MAX_SCAN_PAGES || '3', 10);
+
     // Für jede konfigurierte URL
     for (const urlConfig of enabledUrls) {
       try {
-        console.log(`Scraping Vinted: ${urlConfig.name}...`);
+        console.log(`Scraping Vinted: ${urlConfig.name}... (max ${maxPages} Seiten)`);
         
-        // Vinted Katalog scrappen
-        const vintedItems = await scrapeVintedCatalogUrl(urlConfig.url);
+        // Vinted Katalog scrappen mit konfiguriertem Seitenlimit
+        const vintedItems = await scrapeVintedCatalogUrl(urlConfig.url, maxPages);
         
         console.log(`Gefunden: ${vintedItems.length} Artikel auf Vinted`);
         
-        // Limit für Vercel Timeout (max 10 Items pro URL)
-        const itemsToProcess = vintedItems.slice(0, 10);
-        
+        // Alle Items verarbeiten (kein Limit mehr)
         // Für jedes Vinted Item eBay abfragen
-        for (const vItem of itemsToProcess) {
+        for (const vItem of vintedItems) {
           try {
             let ebayResult = null;
             

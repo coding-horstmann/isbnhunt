@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Layout } from '@/components/Layout';
 import { Button } from '@/components/ui/Button';
 import { Search, ArrowRight, DollarSign, Package, TrendingUp, AlertCircle, Info, Server, Sparkles } from 'lucide-react';
@@ -8,6 +8,14 @@ import { formatCurrency } from '@/lib/utils';
 import { scanDeals } from '@/lib/scanner';
 import { ResultsTable } from '@/components/ResultsTable';
 import type { ArbitrageDeal } from '@/types';
+
+interface VintedUrl {
+  id: string;
+  name: string;
+  url: string;
+  category: string;
+  enabled: boolean;
+}
 
 // Placeholder Stats Component
 const StatsCard = ({ title, value, icon: Icon, trend }: { title: string, value: string, icon: any, trend?: string }) => (
@@ -27,19 +35,46 @@ const StatsCard = ({ title, value, icon: Icon, trend }: { title: string, value: 
 
 export default function Home() {
   const [isSearching, setIsSearching] = useState(false);
+  const [scanningCategory, setScanningCategory] = useState<string | null>(null);
   const [deals, setDeals] = useState<ArbitrageDeal[]>([]);
   const [showCodeInfo, setShowCodeInfo] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [useAI, setUseAI] = useState(false);
+  const [categories, setCategories] = useState<VintedUrl[]>([]);
   
   const totalPotentialProfit = deals.reduce((acc, deal) => acc + (deal.profitAfterFees > 0 ? deal.profitAfterFees : 0), 0);
   const avgRoi = deals.length > 0 ? deals.reduce((acc, deal) => acc + deal.roi, 0) / deals.length : 0;
 
-  const handleStartScan = async () => {
+  // Lade Kategorien aus localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const storedUrls = localStorage.getItem('vinted-urls');
+      if (storedUrls) {
+        try {
+          const parsed = JSON.parse(storedUrls);
+          setCategories(parsed.filter((u: VintedUrl) => u.enabled));
+        } catch (e) {
+          console.error('Fehler beim Laden der Kategorien');
+        }
+      } else {
+        // Standard-Kategorie
+        setCategories([{
+          id: 'sachbuecher-all',
+          name: 'Sachbücher (Sehr gut, Neu, Neu mit Etikett)',
+          url: 'https://www.vinted.de/catalog?catalog[]=2320&status_ids[]=1&status_ids[]=2&status_ids[]=6&order=newest_first',
+          category: 'Bücher & Medien - Sachbücher',
+          enabled: true
+        }]);
+      }
+    }
+  }, []);
+
+  const handleStartScan = async (categoryId?: string) => {
     setIsSearching(true);
+    setScanningCategory(categoryId || null);
     setError(null);
     try {
-      const foundDeals = await scanDeals(useAI);
+      const foundDeals = await scanDeals(useAI, categoryId);
       setDeals(foundDeals);
       if (foundDeals.length === 0 && !useAI) {
         setError("Keine Deals gefunden. Versuche KI-Fallback zu aktivieren.");
@@ -49,6 +84,7 @@ export default function Home() {
       setError("Scan error. Please try again.");
     } finally {
       setIsSearching(false);
+      setScanningCategory(null);
     }
   };
 
@@ -165,17 +201,32 @@ export default function Home() {
             }
           </p>
           
-          {!isSearching && (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-3xl mx-auto text-left">
-              {['Books (Non-Fiction)', 'Comics/Manga', 'Retro Games'].map((cat) => (
-                <button key={cat} onClick={handleStartScan} className="p-4 rounded-xl border border-slate-700 bg-surface hover:border-primary/50 transition-all cursor-pointer group hover:bg-slate-800 text-left w-full">
+          {!isSearching && categories.length > 0 && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-w-5xl mx-auto text-left">
+              {categories.map((cat) => (
+                <button 
+                  key={cat.id} 
+                  onClick={() => handleStartScan(cat.id)} 
+                  disabled={isSearching}
+                  className="p-4 rounded-xl border border-slate-700 bg-surface hover:border-primary/50 transition-all cursor-pointer group hover:bg-slate-800 text-left w-full disabled:opacity-50 disabled:cursor-not-allowed"
+                >
                   <div className="flex items-center justify-between">
-                    <span className="font-medium text-slate-200 group-hover:text-primary transition-colors">{cat}</span>
-                    <ArrowRight className="h-4 w-4 text-slate-500 group-hover:text-primary opacity-0 group-hover:opacity-100 transition-all transform group-hover:translate-x-1" />
+                    <div className="flex-1">
+                      <span className="font-medium text-slate-200 group-hover:text-primary transition-colors block mb-1">
+                        {cat.name}
+                      </span>
+                      <span className="text-xs text-slate-500">{cat.category}</span>
+                    </div>
+                    <ArrowRight className="h-4 w-4 text-slate-500 group-hover:text-primary opacity-0 group-hover:opacity-100 transition-all transform group-hover:translate-x-1 flex-shrink-0 ml-2" />
                   </div>
                 </button>
               ))}
             </div>
+          )}
+          {!isSearching && categories.length === 0 && (
+            <p className="text-slate-500 text-sm">
+              Keine Kategorien konfiguriert. Bitte in den Settings Kategorien hinzufügen.
+            </p>
           )}
         </div>
       )}

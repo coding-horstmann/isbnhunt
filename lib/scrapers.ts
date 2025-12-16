@@ -30,190 +30,254 @@ function mapVintedCondition(vintedCondition: string): string {
 }
 
 /**
- * Scraped Vinted Katalog-URLs direkt (z.B. für spezifische Kategorien)
- * Mit Rate Limiting um Bot-Schutz zu umgehen
+ * Scraped eine einzelne Vinted-Seite
  */
-export const scrapeVintedCatalogUrl = async (catalogUrl: string) => {
-  try {
-    // Rate Limiting: 2-5 Sekunden Delay zwischen Requests
-    await new Promise(resolve => setTimeout(resolve, 2000 + Math.random() * 3000));
+async function scrapeVintedPage(url: string): Promise<{ items: any[], hasNextPage: boolean, nextPageUrl?: string }> {
+  // Rate Limiting: 2-5 Sekunden Delay zwischen Requests
+  await new Promise(resolve => setTimeout(resolve, 2000 + Math.random() * 3000));
+  
+  const { data } = await axios.get(url, {
+    headers: {
+      'User-Agent': getRandomUserAgent(),
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      'Accept-Language': 'de-DE,de;q=0.9,en-US;q=0.8,en;q=0.7',
+      'Accept-Encoding': 'gzip, deflate, br',
+      'Referer': 'https://www.vinted.de/',
+      'Connection': 'keep-alive',
+      'Upgrade-Insecure-Requests': '1',
+      'Sec-Fetch-Dest': 'document',
+      'Sec-Fetch-Mode': 'navigate',
+      'Sec-Fetch-Site': 'same-origin',
+    },
+    timeout: 30000,
+  });
+
+  const $ = cheerio.load(data);
+  const items: any[] = [];
+
+  // Vinted Selektoren - erweiterte Varianten für verschiedene Seitenlayouts
+  const selectors = [
+    '.feed-grid__item',
+    '[data-testid="item-box"]',
+    '.item-box',
+    '.new-item-box',
+    'article[data-testid="item-box"]',
+    '[class*="ItemBox"]',
+    '[class*="item-box"]',
+    'div[class*="feed"] > div',
+    'div[class*="grid"] > div',
+    'a[href*="/items/"]'
+  ];
+
+  let foundItems = false;
+  for (const selector of selectors) {
+    const elements = $(selector);
     
-    const { data } = await axios.get(catalogUrl, {
-      headers: {
-        'User-Agent': getRandomUserAgent(),
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Language': 'de-DE,de;q=0.9,en-US;q=0.8,en;q=0.7',
-        'Accept-Encoding': 'gzip, deflate, br',
-        'Referer': 'https://www.vinted.de/',
-        'Connection': 'keep-alive',
-        'Upgrade-Insecure-Requests': '1',
-        'Sec-Fetch-Dest': 'document',
-        'Sec-Fetch-Mode': 'navigate',
-        'Sec-Fetch-Site': 'same-origin',
-      },
-      timeout: 30000,
-    });
-
-    const $ = cheerio.load(data);
-    const items: any[] = [];
-
-    // Debug: HTML-Struktur prüfen
-    console.log('HTML Content Length:', data.length);
-    console.log('Checking for Vinted structure...');
-
-    // Vinted Selektoren - erweiterte Varianten für verschiedene Seitenlayouts
-    const selectors = [
-      '.feed-grid__item',
-      '[data-testid="item-box"]',
-      '.item-box',
-      '.new-item-box',
-      'article[data-testid="item-box"]',
-      '[class*="ItemBox"]',
-      '[class*="item-box"]',
-      'div[class*="feed"] > div',
-      'div[class*="grid"] > div',
-      'a[href*="/items/"]'
-    ];
-
-    let foundItems = false;
-    for (const selector of selectors) {
-      const elements = $(selector);
-      console.log(`Selector "${selector}": ${elements.length} elements found`);
-      
-      if (elements.length > 0) {
-        foundItems = true;
-        elements.each((_, element) => {
-          const $el = $(element);
-          
-          // Titel extrahieren - mehrere Varianten
-          const title = $el.find('[data-testid="item-box-title"], .item-box__title, h2, h3, h4, [class*="title"]').first().text().trim() ||
-                       $el.attr('title') ||
-                       $el.text().trim();
-          
-          // Preis extrahieren - mehrere Varianten
-          const priceText = $el.find('[data-testid="item-box-price"], .item-box__price, .price, [class*="price"], [class*="Price"]').first().text().trim() ||
-                           $el.find('span:contains("€")').first().text().trim();
-          const priceMatch = priceText.match(/[\d,]+/);
-          const price = priceMatch ? parseFloat(priceMatch[0].replace(',', '.')) : null;
-          
-          // URL extrahieren
-          const relativeUrl = $el.find('a').first().attr('href') || 
-                            $el.attr('href') ||
-                            $el.closest('a').attr('href');
-          const url = relativeUrl 
-            ? (relativeUrl.startsWith('http') ? relativeUrl : `https://www.vinted.de${relativeUrl}`)
-            : null;
-          
-          // Bild extrahieren - mehrere Varianten
-          const img = $el.find('img').first().attr('src') || 
-                      $el.find('img').first().attr('data-src') ||
-                      $el.find('img').first().attr('data-lazy-src') ||
-                      $el.find('img').first().attr('data-original') ||
-                      $el.find('[style*="background-image"]').attr('style')?.match(/url\(['"]?(.*?)['"]?\)/)?.[1] ||
-                      '';
-          
-          // Zustand extrahieren
-          const conditionText = $el.find('[data-testid="item-box-condition"], .item-box__condition, .condition, [class*="condition"]').first().text().trim();
-          const condition = conditionText ? mapVintedCondition(conditionText) : 'Sehr gut';
-
-          // Validierung: Mindestens Titel und URL müssen vorhanden sein
-          if (title && title.length > 3 && url && url.includes('/items/')) {
-            // Preis kann auch 0 sein oder fehlen
-            const finalPrice = (price !== null && !isNaN(price) && price > 0) ? price : 0;
-            
-            items.push({
-              title: title.substring(0, 200), // Titel begrenzen
-              price: finalPrice,
-              url,
-              imageUrl: img || 'https://placehold.co/400?text=No+Image',
-              condition,
-              platform: 'vinted'
-            });
-          }
-        });
+    if (elements.length > 0) {
+      foundItems = true;
+      elements.each((_, element) => {
+        const $el = $(element);
         
-        // Wenn Items gefunden wurden, nicht weiter suchen
-        if (items.length > 0) {
-          break;
-        }
-      }
-    }
+        // Titel extrahieren - mehrere Varianten
+        const title = $el.find('[data-testid="item-box-title"], .item-box__title, h2, h3, h4, [class*="title"]').first().text().trim() ||
+                     $el.attr('title') ||
+                     $el.text().trim();
+        
+        // Preis extrahieren - mehrere Varianten
+        const priceText = $el.find('[data-testid="item-box-price"], .item-box__price, .price, [class*="price"], [class*="Price"]').first().text().trim() ||
+                         $el.find('span:contains("€")').first().text().trim();
+        const priceMatch = priceText.match(/[\d,]+/);
+        const price = priceMatch ? parseFloat(priceMatch[0].replace(',', '.')) : null;
+        
+        // URL extrahieren
+        const relativeUrl = $el.find('a').first().attr('href') || 
+                          $el.attr('href') ||
+                          $el.closest('a').attr('href');
+        const url = relativeUrl 
+          ? (relativeUrl.startsWith('http') ? relativeUrl : `https://www.vinted.de${relativeUrl}`)
+          : null;
+        
+        // Bild extrahieren - mehrere Varianten
+        const img = $el.find('img').first().attr('src') || 
+                    $el.find('img').first().attr('data-src') ||
+                    $el.find('img').first().attr('data-lazy-src') ||
+                    $el.find('img').first().attr('data-original') ||
+                    $el.find('[style*="background-image"]').attr('style')?.match(/url\(['"]?(.*?)['"]?\)/)?.[1] ||
+                    '';
+        
+        // Zustand extrahieren
+        const conditionText = $el.find('[data-testid="item-box-condition"], .item-box__condition, .condition, [class*="condition"]').first().text().trim();
+        const condition = conditionText ? mapVintedCondition(conditionText) : 'Sehr gut';
 
-    // Fallback: Suche nach JSON-Daten im HTML (Vinted nutzt manchmal JSON)
-    if (!foundItems || items.length === 0) {
-      console.warn('No items found with standard selectors, trying JSON fallback...');
-      
-      // Versuche JSON-Daten aus Script-Tags zu extrahieren
-      $('script[type="application/json"]').each((_, element) => {
-        try {
-          const jsonText = $(element).html();
-          if (jsonText && jsonText.includes('items')) {
-            const jsonData = JSON.parse(jsonText);
-            // Versuche Items aus verschiedenen JSON-Strukturen zu extrahieren
-            const extractedItems = extractItemsFromJSON(jsonData);
-            if (extractedItems.length > 0) {
-              items.push(...extractedItems);
-            }
-          }
-        } catch (e) {
-          // Ignore JSON parse errors
+        // Validierung: Mindestens Titel und URL müssen vorhanden sein
+        if (title && title.length > 3 && url && url.includes('/items/')) {
+          // Preis kann auch 0 sein oder fehlen
+          const finalPrice = (price !== null && !isNaN(price) && price > 0) ? price : 0;
+          
+          items.push({
+            title: title.substring(0, 200), // Titel begrenzen
+            price: finalPrice,
+            url,
+            imageUrl: img || 'https://placehold.co/400?text=No+Image',
+            condition,
+            platform: 'vinted'
+          });
         }
       });
       
-      // Fallback: Suche nach allen Links die zu /items/ führen
-      if (items.length === 0) {
-        $('a[href*="/items/"]').each((_, element) => {
-          const $el = $(element);
-          const title = $el.text().trim() || $el.attr('title') || '';
-          const url = $el.attr('href');
+      // Wenn Items gefunden wurden, nicht weiter suchen
+      if (items.length > 0) {
+        break;
+      }
+    }
+  }
+
+  // Fallback: Suche nach JSON-Daten im HTML (Vinted nutzt manchmal JSON)
+  if (!foundItems || items.length === 0) {
+    // Versuche JSON-Daten aus Script-Tags zu extrahieren
+    $('script[type="application/json"]').each((_, element) => {
+      try {
+        const jsonText = $(element).html();
+        if (jsonText && jsonText.includes('items')) {
+          const jsonData = JSON.parse(jsonText);
+          // Versuche Items aus verschiedenen JSON-Strukturen zu extrahieren
+          const extractedItems = extractItemsFromJSON(jsonData);
+          if (extractedItems.length > 0) {
+            items.push(...extractedItems);
+          }
+        }
+      } catch (e) {
+        // Ignore JSON parse errors
+      }
+    });
+    
+    // Fallback: Suche nach allen Links die zu /items/ führen
+    if (items.length === 0) {
+      $('a[href*="/items/"]').each((_, element) => {
+        const $el = $(element);
+        const title = $el.text().trim() || $el.attr('title') || '';
+        const url = $el.attr('href');
+        
+        if (title && title.length > 5 && url) {
+          // Versuche Preis aus dem umgebenden Element zu finden
+          const priceText = $el.closest('div, article, section').find('.price, [class*="price"], span:contains("€")').first().text().trim();
+          const priceMatch = priceText.match(/[\d,]+/);
+          const price = priceMatch ? parseFloat(priceMatch[0].replace(',', '.')) : 0;
           
-          if (title && title.length > 5 && url) {
-            // Versuche Preis aus dem umgebenden Element zu finden
-            const priceText = $el.closest('div, article, section').find('.price, [class*="price"], span:contains("€")').first().text().trim();
-            const priceMatch = priceText.match(/[\d,]+/);
-            const price = priceMatch ? parseFloat(priceMatch[0].replace(',', '.')) : 0;
-            
-            items.push({
-              title: title.substring(0, 200),
-              price,
-              url: url.startsWith('http') ? url : `https://www.vinted.de${url}`,
-              imageUrl: '',
-              condition: 'Sehr gut',
-              platform: 'vinted'
-            });
-          }
+          items.push({
+            title: title.substring(0, 200),
+            price,
+            url: url.startsWith('http') ? url : `https://www.vinted.de${url}`,
+            imageUrl: '',
+            condition: 'Sehr gut',
+            platform: 'vinted'
+          });
+        }
+      });
+    }
+  }
+
+  // Prüfe auf nächste Seite
+  let hasNextPage = false;
+  let nextPageUrl: string | undefined;
+  
+  // Suche nach Pagination-Links
+  const nextPageLink = $('a[aria-label*="next"], a[aria-label*="Next"], a[aria-label*="weiter"], .pagination__next, [class*="pagination"] a:contains("›"), [class*="pagination"] a:contains(">")').first();
+  if (nextPageLink.length > 0) {
+    const href = nextPageLink.attr('href');
+    if (href && !href.includes('javascript')) {
+      hasNextPage = true;
+      nextPageUrl = href.startsWith('http') ? href : `https://www.vinted.de${href}`;
+    }
+  }
+  
+  // Alternative: Prüfe auf "page" Parameter in URL
+  const urlObj = new URL(url);
+  const currentPage = parseInt(urlObj.searchParams.get('page') || '1');
+  // Wenn wir Items gefunden haben, versuche nächste Seite
+  if (items.length > 0) {
+    urlObj.searchParams.set('page', (currentPage + 1).toString());
+    // Teste ob nächste Seite existiert (wird später geprüft)
+    hasNextPage = true;
+    nextPageUrl = urlObj.toString();
+  }
+
+  return { items, hasNextPage, nextPageUrl };
+}
+
+/**
+ * Helper-Funktion für JSON-Extraktion
+ */
+function extractItemsFromJSON(data: any): any[] {
+  const results: any[] = [];
+  
+  if (Array.isArray(data)) {
+    data.forEach(item => {
+      if (item.title || item.name) {
+        results.push({
+          title: item.title || item.name || '',
+          price: item.price || item.price_value || 0,
+          url: item.url || item.web_url || '',
+          imageUrl: item.image_url || item.photo?.url || '',
+          condition: item.condition || 'Sehr gut',
+          platform: 'vinted'
         });
       }
-    }
+    });
+  } else if (data.items) {
+    return extractItemsFromJSON(data.items);
+  } else if (data.catalog) {
+    return extractItemsFromJSON(data.catalog.items || data.catalog);
+  }
+  
+  return results;
+}
 
-    // Helper-Funktion für JSON-Extraktion
-    function extractItemsFromJSON(data: any): any[] {
-      const results: any[] = [];
+/**
+ * Scraped Vinted Katalog-URLs direkt (z.B. für spezifische Kategorien)
+ * Scraped ALLE Seiten, nicht nur die erste
+ * Mit Rate Limiting um Bot-Schutz zu umgehen
+ */
+export const scrapeVintedCatalogUrl = async (catalogUrl: string, maxPages: number = 3) => {
+  try {
+    console.log(`Starting scrape of Vinted catalog: ${catalogUrl}`);
+    
+    const allItems: any[] = [];
+    let currentUrl: string | undefined = catalogUrl;
+    let pageCount = 0;
+    let consecutiveEmptyPages = 0;
+
+    while (currentUrl && pageCount < maxPages) {
+      pageCount++;
+      console.log(`Scraping page ${pageCount}...`);
       
-      if (Array.isArray(data)) {
-        data.forEach(item => {
-          if (item.title || item.name) {
-            results.push({
-              title: item.title || item.name || '',
-              price: item.price || item.price_value || 0,
-              url: item.url || item.web_url || '',
-              imageUrl: item.image_url || item.photo?.url || '',
-              condition: item.condition || 'Sehr gut',
-              platform: 'vinted'
-            });
-          }
-        });
-      } else if (data.items) {
-        return extractItemsFromJSON(data.items);
-      } else if (data.catalog) {
-        return extractItemsFromJSON(data.catalog.items || data.catalog);
+      const { items, hasNextPage, nextPageUrl } = await scrapeVintedPage(currentUrl);
+      
+      if (items.length > 0) {
+        allItems.push(...items);
+        consecutiveEmptyPages = 0;
+        console.log(`Found ${items.length} items on page ${pageCount} (Total: ${allItems.length})`);
+      } else {
+        consecutiveEmptyPages++;
+        console.log(`No items found on page ${pageCount}`);
+        // Wenn 2 Seiten hintereinander leer sind, stoppe
+        if (consecutiveEmptyPages >= 2) {
+          console.log('Stopping: 2 consecutive empty pages');
+          break;
+        }
       }
-      
-      return results;
+
+      // Wenn keine nächste Seite oder zu viele leere Seiten, stoppe
+      if (!hasNextPage || !nextPageUrl) {
+        console.log('No next page found, stopping');
+        break;
+      }
+
+      currentUrl = nextPageUrl;
     }
 
-    console.log(`Scraped ${items.length} items from Vinted`);
-    return items;
+    console.log(`Scraped ${allItems.length} total items from ${pageCount} pages`);
+    return allItems;
   } catch (error) {
     console.error("Vinted Catalog Scrape Error:", error);
     throw new Error(`Failed to scrape Vinted catalog: ${error instanceof Error ? error.message : 'Unknown error'}`);

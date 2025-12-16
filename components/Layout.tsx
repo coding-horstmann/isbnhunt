@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Search, Settings, TrendingUp, Menu, X } from 'lucide-react';
+import { LayoutDashboard, Settings, Menu, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface LayoutProps {
@@ -31,8 +31,6 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
 
   const menuItems = [
     { icon: LayoutDashboard, label: "Dashboard", href: "/" },
-    { icon: Search, label: "Search Deals", href: "/search" },
-    { icon: TrendingUp, label: "History", href: "/history" },
     { icon: Settings, label: "Settings", href: "/settings" },
   ];
 
@@ -43,7 +41,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         <div className="p-6">
           <Link href="/" className="flex items-center gap-2">
             <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-primary to-blue-600 flex items-center justify-center">
-              <TrendingUp className="h-5 w-5 text-white" />
+              <LayoutDashboard className="h-5 w-5 text-white" />
             </div>
             <span className="font-bold text-lg tracking-tight">Arbitrage<span className="text-primary">Finder</span></span>
           </Link>
@@ -61,18 +59,6 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           ))}
         </div>
 
-        <div className="p-4 border-t border-slate-800">
-          <div className="rounded-xl bg-surface p-4">
-            <p className="text-xs text-slate-400 mb-2">API Usage</p>
-            <div className="h-1.5 w-full bg-slate-700 rounded-full overflow-hidden">
-              <div className="h-full bg-primary w-[35%] rounded-full" />
-            </div>
-            <div className="mt-2 flex justify-between text-xs text-slate-500">
-              <span>350/1000</span>
-              <span>Requests</span>
-            </div>
-          </div>
-        </div>
       </aside>
 
       {/* Mobile Header */}

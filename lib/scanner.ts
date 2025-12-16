@@ -12,8 +12,9 @@ import { ArbitrageDeal } from '@/types';
  *    falls back to Gemini AI Simulation (nur wenn useAI=true).
  * 
  * @param useAI - Wenn true, wird bei API-Fehler Gemini AI verwendet. Wenn false, wird leeres Array zurückgegeben.
+ * @param specificUrlId - Optional: ID einer spezifischen URL aus vinted-urls.json, um nur diese zu scannen
  */
-export const scanDeals = async (useAI: boolean = false): Promise<ArbitrageDeal[]> => {
+export const scanDeals = async (useAI: boolean = false, specificUrlId?: string): Promise<ArbitrageDeal[]> => {
   
   // --- STRATEGY 1: REAL SERVER SCRAPING ---
   try {
@@ -25,17 +26,22 @@ export const scanDeals = async (useAI: boolean = false): Promise<ArbitrageDeal[]
       const storedUrls = localStorage.getItem('vinted-urls');
       if (storedUrls) {
         try {
-          customUrls = JSON.parse(storedUrls);
+          const allUrls = JSON.parse(storedUrls);
+          // Wenn specificUrlId angegeben, filtere nur diese URL
+          if (specificUrlId) {
+            customUrls = allUrls.filter((u: any) => u.id === specificUrlId);
+          } else {
+            customUrls = allUrls;
+          }
         } catch (e) {
           console.warn('Fehler beim Laden der URLs aus localStorage');
         }
       }
     }
     
-    // We set a short timeout because if the API route doesn't exist (client-only preview),
-    // we don't want to wait forever.
+    // We set a longer timeout for full scans (can take several minutes)
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout für echte Scans
+    const timeoutId = setTimeout(() => controller.abort(), 300000); // 5 Minuten timeout für vollständige Scans
 
     // URLs als Query-Parameter senden, falls vorhanden
     const url = customUrls && customUrls.length > 0
