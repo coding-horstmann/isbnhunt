@@ -198,3 +198,11 @@ export const getEbaySearchUrl = (title: string, condition: string): string => {
   return `https://www.ebay.de/sch/i.html?_nkw=${encodeURIComponent(title)}&LH_Sold=1&LH_Complete=1${conditionParam}`;
 };
 
+/**
+ * Generiert eine URL zur eBay Research-Seite für verkaufte Artikel
+ * Diese Seite zeigt detaillierte Verkaufsstatistiken für ein Produkt
+ */
+export const getEbayResearchUrl = (title: string): string => {
+  return `https://www.ebay.de/sh/research?marketplace=EBAY-DE&tabName=SOLD&query=${encodeURIComponent(title)}`;
+};
+

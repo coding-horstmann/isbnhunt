@@ -1,8 +1,9 @@
 import React, { useState, useMemo } from 'react';
-import { ExternalLink, ArrowRight, ArrowUp, ArrowDown } from 'lucide-react';
+import { ExternalLink, ArrowRight, ArrowUp, ArrowDown, BarChart3 } from 'lucide-react';
 import { ArbitrageDeal } from '@/types';
 import { formatCurrency, cn } from '@/lib/utils';
 import { Button } from './ui/Button';
+import { getEbayResearchUrl } from '@/lib/ebay-api';
 
 interface ResultsTableProps {
   deals: ArbitrageDeal[];
@@ -168,6 +169,15 @@ export const ResultsTable: React.FC<ResultsTableProps> = ({ deals }) => {
                         </Button>
                         <Button variant="secondary" size="sm" className="h-8 px-2 text-xs" onClick={() => window.open(deal.ebay.url, '_blank')}>
                          eBay <ArrowRight className="ml-1 h-3 w-3 -rotate-45" />
+                        </Button>
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          className="h-8 px-2 text-xs border-purple-500/30 text-purple-400 hover:bg-purple-500/10" 
+                          onClick={() => window.open(getEbayResearchUrl(deal.vinted.title), '_blank')}
+                          title="eBay Research - Verkaufte Artikel analysieren"
+                        >
+                         Research <BarChart3 className="ml-1 h-3 w-3" />
                         </Button>
                     </div>
                     </td>
