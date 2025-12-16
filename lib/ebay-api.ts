@@ -203,6 +203,7 @@ export const getEbaySearchUrl = (title: string, condition: string): string => {
  * Diese Seite zeigt detaillierte Verkaufsstatistiken für ein Produkt
  */
 export const getEbayResearchUrl = (title: string): string => {
-  return `https://www.ebay.de/sh/research?marketplace=EBAY-DE&tabName=SOLD&query=${encodeURIComponent(title)}`;
+  // eBay Research verwendet _nkw als Suchparameter, ähnlich wie die normale Suche
+  return `https://www.ebay.de/sh/research?marketplace=EBAY-DE&tabName=SOLD&_nkw=${encodeURIComponent(title)}`;
 };
 

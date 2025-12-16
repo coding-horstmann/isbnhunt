@@ -61,12 +61,19 @@ export async function GET(request: Request) {
         
         // Alle Items verarbeiten (kein Limit mehr)
         // Für jedes Vinted Item eBay abfragen
-        for (const vItem of vintedItems) {
+        for (let i = 0; i < vintedItems.length; i++) {
+          const vItem = vintedItems[i];
           try {
             let ebayResult = null;
             
             // eBay API verwenden wenn konfiguriert
             if (ebayConfig.appId) {
+              // Rate Limiting: Warte zwischen API-Aufrufen um Rate-Limit zu vermeiden
+              // 300ms Delay zwischen Aufrufen (max ~3 Anfragen pro Sekunde)
+              if (i > 0) {
+                await new Promise(resolve => setTimeout(resolve, 300));
+              }
+              
               ebayResult = await searchEbayByTitle(
                 vItem.title,
                 vItem.condition,
