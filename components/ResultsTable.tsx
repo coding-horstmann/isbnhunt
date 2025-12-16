@@ -1,5 +1,5 @@
-import React from 'react';
-import { ExternalLink, ArrowRight } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { ExternalLink, ArrowRight, ArrowUp, ArrowDown } from 'lucide-react';
 import { ArbitrageDeal } from '@/types';
 import { formatCurrency, cn } from '@/lib/utils';
 import { Button } from './ui/Button';
@@ -8,7 +8,69 @@ interface ResultsTableProps {
   deals: ArbitrageDeal[];
 }
 
+type SortColumn = 'vintedPrice' | 'ebayPrice' | 'profitAfterFees' | 'roi';
+type SortDirection = 'asc' | 'desc';
+
 export const ResultsTable: React.FC<ResultsTableProps> = ({ deals }) => {
+  const [sortColumn, setSortColumn] = useState<SortColumn>('profitAfterFees');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+
+  const sortedDeals = useMemo(() => {
+    const sorted = [...deals].sort((a, b) => {
+      let aValue: number;
+      let bValue: number;
+
+      switch (sortColumn) {
+        case 'vintedPrice':
+          aValue = a.vinted.price;
+          bValue = b.vinted.price;
+          break;
+        case 'ebayPrice':
+          aValue = a.ebay.price;
+          bValue = b.ebay.price;
+          break;
+        case 'profitAfterFees':
+          aValue = a.profitAfterFees;
+          bValue = b.profitAfterFees;
+          break;
+        case 'roi':
+          aValue = a.roi;
+          bValue = b.roi;
+          break;
+        default:
+          return 0;
+      }
+
+      if (sortDirection === 'desc') {
+        return bValue - aValue; // Größte zuerst
+      } else {
+        return aValue - bValue; // Kleinste zuerst
+      }
+    });
+
+    return sorted;
+  }, [deals, sortColumn, sortDirection]);
+
+  const handleSort = (column: SortColumn) => {
+    if (sortColumn === column) {
+      // Toggle direction if same column
+      setSortDirection(sortDirection === 'desc' ? 'asc' : 'desc');
+    } else {
+      // New column, default to desc (largest first)
+      setSortColumn(column);
+      setSortDirection('desc');
+    }
+  };
+
+  const SortIcon = ({ column }: { column: SortColumn }) => {
+    if (sortColumn !== column) {
+      return <ArrowUp className="h-3 w-3 opacity-30" />;
+    }
+    return sortDirection === 'desc' 
+      ? <ArrowDown className="h-3 w-3" /> 
+      : <ArrowUp className="h-3 w-3" />;
+  };
+
   if (deals.length === 0) return null;
 
   return (
@@ -23,15 +85,47 @@ export const ResultsTable: React.FC<ResultsTableProps> = ({ deals }) => {
             <thead>
                 <tr className="border-b border-slate-800 bg-slate-900/50 text-slate-400">
                 <th className="p-4 font-medium">Item</th>
-                <th className="p-4 font-medium">Vinted (Buy)</th>
-                <th className="p-4 font-medium">eBay (Sell)</th>
-                <th className="p-4 font-medium">Net Profit</th>
-                <th className="p-4 font-medium">ROI</th>
+                <th 
+                  className="p-4 font-medium cursor-pointer hover:text-slate-200 transition-colors select-none"
+                  onClick={() => handleSort('vintedPrice')}
+                >
+                  <div className="flex items-center gap-2">
+                    Vinted (Buy)
+                    <SortIcon column="vintedPrice" />
+                  </div>
+                </th>
+                <th 
+                  className="p-4 font-medium cursor-pointer hover:text-slate-200 transition-colors select-none"
+                  onClick={() => handleSort('ebayPrice')}
+                >
+                  <div className="flex items-center gap-2">
+                    eBay (Sell)
+                    <SortIcon column="ebayPrice" />
+                  </div>
+                </th>
+                <th 
+                  className="p-4 font-medium cursor-pointer hover:text-slate-200 transition-colors select-none"
+                  onClick={() => handleSort('profitAfterFees')}
+                >
+                  <div className="flex items-center gap-2">
+                    Net Profit
+                    <SortIcon column="profitAfterFees" />
+                  </div>
+                </th>
+                <th 
+                  className="p-4 font-medium cursor-pointer hover:text-slate-200 transition-colors select-none"
+                  onClick={() => handleSort('roi')}
+                >
+                  <div className="flex items-center gap-2">
+                    ROI
+                    <SortIcon column="roi" />
+                  </div>
+                </th>
                 <th className="p-4 font-medium text-right">Actions</th>
                 </tr>
             </thead>
             <tbody className="divide-y divide-slate-800">
-                {deals.map((deal) => (
+                {sortedDeals.map((deal) => (
                 <tr key={deal.id} className="group transition-colors hover:bg-slate-800/50">
                     <td className="p-4">
                     <div className="flex items-center gap-3">
