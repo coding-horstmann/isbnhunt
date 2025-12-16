@@ -61,7 +61,7 @@ export async function GET(request: Request) {
         
         // Alle Items verarbeiten (kein Limit mehr)
         // Für jedes Vinted Item eBay abfragen
-        const ebayApiDelay = parseInt(process.env.EBAY_API_DELAY_MS || '1000', 10); // Standard: 1000ms (1 Sekunde)
+        const ebayApiDelay = parseInt(process.env.EBAY_API_DELAY_MS || '2000', 10); // Standard: 2000ms (2 Sekunden)
         let consecutiveRateLimitErrors = 0;
         const maxConsecutiveRateLimitErrors = 5; // Nach 5 aufeinanderfolgenden Fehlern überspringe eBay API
         
