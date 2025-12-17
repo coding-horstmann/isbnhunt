@@ -34,7 +34,8 @@ function mapVintedCondition(vintedCondition: string): string {
  */
 async function scrapeVintedItemLanguage(itemUrl: string): Promise<string | null> {
   try {
-    await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 2000)); // Rate Limiting
+    // Erhöhtes Rate Limiting: 3-5 Sekunden zwischen Anfragen
+    await new Promise(resolve => setTimeout(resolve, 3000 + Math.random() * 2000));
     
     const { data } = await axios.get(itemUrl, {
       headers: {
@@ -436,18 +437,63 @@ export const scrapeVintedCatalogUrl = async (catalogUrl: string, maxPages: numbe
       if (items.length > 0) {
         // Wenn Sprache-Filter aktiv ist und Sprache noch nicht bekannt, extrahiere sie von Produktseiten
         if (languageFilter && languageFilter !== 'Alle Sprachen') {
-          const itemsWithLanguage = await Promise.all(
-            items.map(async (item) => {
-              // Wenn Sprache bereits vorhanden, verwende sie
-              if (item.language) {
-                return item;
-              }
-              
-              // Sonst extrahiere Sprache von Produktseite
+          // Sequenzielle Verarbeitung statt parallel, um Rate-Limiting zu vermeiden
+          const itemsWithLanguage: any[] = [];
+          let rateLimitErrors = 0;
+          const maxRateLimitErrors = 3; // Nach 3 Fehlern stoppe Sprachextraktion
+          
+          for (let i = 0; i < items.length; i++) {
+            const item = items[i];
+            
+            // Wenn Sprache bereits vorhanden, verwende sie
+            if (item.language) {
+              itemsWithLanguage.push(item);
+              continue;
+            }
+            
+            // Wenn zu viele Rate-Limit-Fehler, überspringe weitere Sprachextraktion
+            if (rateLimitErrors >= maxRateLimitErrors) {
+              console.warn(`Zu viele Rate-Limit-Fehler bei Sprachextraktion. Überspringe verbleibende ${items.length - i} Items.`);
+              // Füge verbleibende Items ohne Sprache hinzu
+              itemsWithLanguage.push(...items.slice(i).map(it => ({ ...it, language: undefined })));
+              break;
+            }
+            
+            try {
+              // Sonst extrahiere Sprache von Produktseite (sequenziell)
               const language = await scrapeVintedItemLanguage(item.url);
-              return { ...item, language: language || undefined };
-            })
-          );
+              itemsWithLanguage.push({ ...item, language: language || undefined });
+              
+              // Reset Rate-Limit-Fehler bei Erfolg
+              rateLimitErrors = 0;
+            } catch (error: any) {
+              // Prüfe ob es ein Rate-Limit-Fehler ist (429)
+              if (error?.response?.status === 429) {
+                rateLimitErrors++;
+                console.warn(`Rate-Limit-Fehler bei Sprachextraktion (${rateLimitErrors}/${maxRateLimitErrors}). Warte länger...`);
+                // Warte länger bei Rate-Limit-Fehler
+                await new Promise(resolve => setTimeout(resolve, 5000 + Math.random() * 5000));
+                
+                // Versuche nochmal (nur einmal)
+                if (rateLimitErrors < maxRateLimitErrors) {
+                  try {
+                    await new Promise(resolve => setTimeout(resolve, 5000));
+                    const language = await scrapeVintedItemLanguage(item.url);
+                    itemsWithLanguage.push({ ...item, language: language || undefined });
+                    rateLimitErrors = 0; // Reset bei Erfolg
+                  } catch (retryError) {
+                    // Bei erneutem Fehler, füge Item ohne Sprache hinzu
+                    itemsWithLanguage.push({ ...item, language: undefined });
+                  }
+                } else {
+                  itemsWithLanguage.push({ ...item, language: undefined });
+                }
+              } else {
+                // Anderer Fehler: Füge Item ohne Sprache hinzu
+                itemsWithLanguage.push({ ...item, language: undefined });
+              }
+            }
+          }
           
           // Filtere nach Sprache
           const filteredItems = itemsWithLanguage.filter(item => {
