@@ -43,10 +43,23 @@ export const scanDeals = async (useAI: boolean = false, specificUrlId?: string):
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 300000); // 5 Minuten timeout für vollständige Scans
 
-    // URLs als Query-Parameter senden, falls vorhanden
-    const url = customUrls && customUrls.length > 0
-      ? `/api/scan?urls=${encodeURIComponent(JSON.stringify(customUrls))}`
-      : '/api/scan';
+    // Sprache-Einstellung aus localStorage laden
+    let languageFilter = 'Deutsch'; // Standard
+    if (typeof window !== 'undefined') {
+      const storedLanguage = localStorage.getItem('vinted-language-filter');
+      if (storedLanguage) {
+        languageFilter = storedLanguage;
+      }
+    }
+
+    // URLs und Sprache als Query-Parameter senden
+    const params = new URLSearchParams();
+    if (customUrls && customUrls.length > 0) {
+      params.append('urls', JSON.stringify(customUrls));
+    }
+    params.append('language', languageFilter);
+    
+    const url = `/api/scan?${params.toString()}`;
 
     const response = await fetch(url, { 
       signal: controller.signal,

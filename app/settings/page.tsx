@@ -23,8 +23,9 @@ export default function SettingsPage() {
     category: '',
     enabled: true
   });
+  const [selectedLanguage, setSelectedLanguage] = useState<string>('Deutsch');
 
-  // URLs aus localStorage laden
+  // URLs und Sprache aus localStorage laden
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const storedUrls = localStorage.getItem('vinted-urls');
@@ -61,6 +62,12 @@ export default function SettingsPage() {
           }
         ]);
       }
+      
+      // Sprache aus localStorage laden
+      const storedLanguage = localStorage.getItem('vinted-language-filter');
+      if (storedLanguage) {
+        setSelectedLanguage(storedLanguage);
+      }
     }
   }, []);
 
@@ -69,6 +76,14 @@ export default function SettingsPage() {
     setUrls(newUrls);
     if (typeof window !== 'undefined') {
       localStorage.setItem('vinted-urls', JSON.stringify(newUrls));
+    }
+  };
+
+  // Sprache speichern
+  const handleLanguageChange = (language: string) => {
+    setSelectedLanguage(language);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('vinted-language-filter', language);
     }
   };
 
@@ -315,6 +330,35 @@ export default function SettingsPage() {
                 </div>
               ))
             )}
+          </div>
+        </div>
+
+        {/* Sprache-Filter Einstellung */}
+        <div className="rounded-xl border border-slate-800 bg-surface p-6 space-y-6">
+          <div>
+            <h2 className="text-lg font-semibold text-white mb-4">Sprache-Filter</h2>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-2">
+                  Bücher-Sprache filtern
+                </label>
+                <select
+                  value={selectedLanguage}
+                  onChange={(e) => handleLanguageChange(e.target.value)}
+                  className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-primary"
+                >
+                  <option value="Alle Sprachen">Alle Sprachen</option>
+                  <option value="Deutsch">Deutsch</option>
+                  <option value="Französisch">Französisch</option>
+                  <option value="Niederländisch">Niederländisch</option>
+                  <option value="Englisch">Englisch</option>
+                  <option value="Italienisch">Italienisch</option>
+                </select>
+                <p className="text-xs text-slate-500 mt-1">
+                  Nur Bücher mit der ausgewählten Sprache werden beim Scraping berücksichtigt. Standard: Deutsch
+                </p>
+              </div>
+            </div>
           </div>
         </div>
 

@@ -37,6 +37,9 @@ export async function GET(request: Request) {
       }
     }
 
+    // Sprache-Filter aus Request-Query (Standard: Deutsch)
+    const languageFilter = new URL(request.url).searchParams.get('language') || 'Deutsch';
+
     // Alle aktivierten Vinted URLs durchgehen
     const enabledUrls = urlsToUse.filter((u: any) => u.enabled);
     
@@ -54,8 +57,8 @@ export async function GET(request: Request) {
       try {
         console.log(`Scraping Vinted: ${urlConfig.name}... (max ${maxPages} Seiten)`);
         
-        // Vinted Katalog scrappen mit konfiguriertem Seitenlimit
-        const vintedItems = await scrapeVintedCatalogUrl(urlConfig.url, maxPages);
+        // Vinted Katalog scrappen mit konfiguriertem Seitenlimit und Sprache-Filter
+        const vintedItems = await scrapeVintedCatalogUrl(urlConfig.url, maxPages, languageFilter);
         
         console.log(`Gefunden: ${vintedItems.length} Artikel auf Vinted`);
         
@@ -155,7 +158,8 @@ export async function GET(request: Request) {
                 url: vItem.url,
                 condition: vItem.condition,
                 imageUrl: vItem.imageUrl || 'https://placehold.co/400?text=No+Image',
-                category: urlConfig.category || 'Unbekannt'
+                category: urlConfig.category || 'Unbekannt',
+                language: vItem.language
               },
               ebay: {
                 price: ebayResult.price || 0,

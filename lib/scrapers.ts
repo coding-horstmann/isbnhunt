@@ -30,6 +30,110 @@ function mapVintedCondition(vintedCondition: string): string {
 }
 
 /**
+ * Extrahiert die Sprache von einer Vinted-Produktseite
+ */
+async function scrapeVintedItemLanguage(itemUrl: string): Promise<string | null> {
+  try {
+    await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 2000)); // Rate Limiting
+    
+    const { data } = await axios.get(itemUrl, {
+      headers: {
+        'User-Agent': getRandomUserAgent(),
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'de-DE,de;q=0.9,en-US;q=0.8,en;q=0.7',
+        'Referer': 'https://www.vinted.de/',
+      },
+      timeout: 30000,
+    });
+
+    const $ = cheerio.load(data);
+    
+    // Suche nach "Sprache" Label und dem zugehörigen Wert
+    // Verschiedene Selektoren für verschiedene Layouts
+    const languageSelectors = [
+      // Suche nach Label "Sprache" und dann den nächsten Wert
+      'dt:contains("Sprache"), dt:contains("Language"), dt:contains("Langue")',
+      'span:contains("Sprache:"), span:contains("Language:"), span:contains("Langue:")',
+      '[class*="detail"]:contains("Sprache")',
+      '[data-testid*="language"]',
+      '[class*="language"]',
+    ];
+
+    for (const selector of languageSelectors) {
+      const $label = $(selector).first();
+      if ($label.length > 0) {
+        // Versuche den Wert nach dem Label zu finden
+        const $value = $label.next('dd').first();
+        if ($value.length > 0) {
+          const languageText = $value.text().trim();
+          if (languageText) {
+            return normalizeLanguage(languageText);
+          }
+        }
+        
+        // Alternative: Suche im gleichen Element nach dem Wert
+        const parentText = $label.parent().text();
+        const languageMatch = parentText.match(/Sprache[:\s]+([^\n\r]+)/i);
+        if (languageMatch && languageMatch[1]) {
+          return normalizeLanguage(languageMatch[1].trim());
+        }
+      }
+    }
+
+    // Fallback: Suche nach bekannten Sprachnamen im gesamten Text
+    const bodyText = $('body').text();
+    const languagePatterns = [
+      { pattern: /Deutsch/i, value: 'Deutsch' },
+      { pattern: /German/i, value: 'Deutsch' },
+      { pattern: /Französisch/i, value: 'Französisch' },
+      { pattern: /French/i, value: 'Französisch' },
+      { pattern: /Niederländisch/i, value: 'Niederländisch' },
+      { pattern: /Dutch/i, value: 'Niederländisch' },
+      { pattern: /Englisch/i, value: 'Englisch' },
+      { pattern: /English/i, value: 'Englisch' },
+      { pattern: /Italienisch/i, value: 'Italienisch' },
+      { pattern: /Italian/i, value: 'Italienisch' },
+    ];
+
+    for (const { pattern, value } of languagePatterns) {
+      if (pattern.test(bodyText)) {
+        return value;
+      }
+    }
+
+    return null;
+  } catch (error) {
+    console.error(`Fehler beim Extrahieren der Sprache von ${itemUrl}:`, error);
+    return null;
+  }
+}
+
+/**
+ * Normalisiert Sprachnamen zu Standardwerten
+ */
+function normalizeLanguage(languageText: string): string {
+  const normalized = languageText.toLowerCase().trim();
+  
+  if (normalized.includes('deutsch') || normalized.includes('german')) {
+    return 'Deutsch';
+  }
+  if (normalized.includes('französisch') || normalized.includes('french') || normalized.includes('français')) {
+    return 'Französisch';
+  }
+  if (normalized.includes('niederländisch') || normalized.includes('dutch') || normalized.includes('nederlands')) {
+    return 'Niederländisch';
+  }
+  if (normalized.includes('englisch') || normalized.includes('english')) {
+    return 'Englisch';
+  }
+  if (normalized.includes('italienisch') || normalized.includes('italian') || normalized.includes('italiano')) {
+    return 'Italienisch';
+  }
+  
+  return languageText; // Fallback: Original zurückgeben
+}
+
+/**
  * Scraped eine einzelne Vinted-Seite
  */
 async function scrapeVintedPage(url: string): Promise<{ items: any[], hasNextPage: boolean, nextPageUrl?: string }> {
@@ -143,6 +247,43 @@ async function scrapeVintedPage(url: string): Promise<{ items: any[], hasNextPag
         const conditionText = $el.find('[data-testid="item-box-condition"], .item-box__condition, .condition, [class*="condition"]').first().text().trim();
         const condition = conditionText ? mapVintedCondition(conditionText) : 'Sehr gut';
 
+        // Versuche Sprache aus der Liste-Seite zu extrahieren (falls verfügbar)
+        // Suche nach Sprache-Informationen im Item-Element
+        let language: string | null = null;
+        
+        // Suche nach Sprache-Attributen und Klassen
+        const languageElement = $el.find('[class*="language"], [data-testid*="language"]').first();
+        if (languageElement.length > 0) {
+          const languageText = languageElement.text().trim() || languageElement.attr('title') || '';
+          if (languageText) {
+            language = normalizeLanguage(languageText);
+          }
+        }
+        
+        // Fallback: Suche im gesamten Item-Text nach Sprachnamen
+        if (!language) {
+          const itemText = $el.text();
+          const languagePatterns = [
+            { pattern: /\bDeutsch\b/i, value: 'Deutsch' },
+            { pattern: /\bGerman\b/i, value: 'Deutsch' },
+            { pattern: /\bFranzösisch\b/i, value: 'Französisch' },
+            { pattern: /\bFrench\b/i, value: 'Französisch' },
+            { pattern: /\bNiederländisch\b/i, value: 'Niederländisch' },
+            { pattern: /\bDutch\b/i, value: 'Niederländisch' },
+            { pattern: /\bEnglisch\b/i, value: 'Englisch' },
+            { pattern: /\bEnglish\b/i, value: 'Englisch' },
+            { pattern: /\bItalienisch\b/i, value: 'Italienisch' },
+            { pattern: /\bItalian\b/i, value: 'Italienisch' },
+          ];
+          
+          for (const { pattern, value } of languagePatterns) {
+            if (pattern.test(itemText)) {
+              language = value;
+              break;
+            }
+          }
+        }
+
         // Validierung: Titel darf nicht nur Preis sein
         const isOnlyPrice = title && title.match(/^[\d,.\s€]+$/);
         
@@ -157,6 +298,7 @@ async function scrapeVintedPage(url: string): Promise<{ items: any[], hasNextPag
             url,
             imageUrl: img || 'https://placehold.co/400?text=No+Image',
             condition,
+            language: language || undefined, // Sprache kann später von Produktseite geholt werden
             platform: 'vinted'
           });
         }
@@ -274,10 +416,11 @@ function extractItemsFromJSON(data: any): any[] {
  * Scraped Vinted Katalog-URLs direkt (z.B. für spezifische Kategorien)
  * Scraped ALLE Seiten, nicht nur die erste
  * Mit Rate Limiting um Bot-Schutz zu umgehen
+ * @param languageFilter - Optional: Filter für Sprache (z.B. "Deutsch", "Alle Sprachen")
  */
-export const scrapeVintedCatalogUrl = async (catalogUrl: string, maxPages: number = 3) => {
+export const scrapeVintedCatalogUrl = async (catalogUrl: string, maxPages: number = 3, languageFilter?: string) => {
   try {
-    console.log(`Starting scrape of Vinted catalog: ${catalogUrl}`);
+    console.log(`Starting scrape of Vinted catalog: ${catalogUrl}${languageFilter && languageFilter !== 'Alle Sprachen' ? ` (Sprache: ${languageFilter})` : ''}`);
     
     const allItems: any[] = [];
     let currentUrl: string | undefined = catalogUrl;
@@ -291,9 +434,41 @@ export const scrapeVintedCatalogUrl = async (catalogUrl: string, maxPages: numbe
       const { items, hasNextPage, nextPageUrl } = await scrapeVintedPage(currentUrl);
       
       if (items.length > 0) {
-        allItems.push(...items);
+        // Wenn Sprache-Filter aktiv ist und Sprache noch nicht bekannt, extrahiere sie von Produktseiten
+        if (languageFilter && languageFilter !== 'Alle Sprachen') {
+          const itemsWithLanguage = await Promise.all(
+            items.map(async (item) => {
+              // Wenn Sprache bereits vorhanden, verwende sie
+              if (item.language) {
+                return item;
+              }
+              
+              // Sonst extrahiere Sprache von Produktseite
+              const language = await scrapeVintedItemLanguage(item.url);
+              return { ...item, language: language || undefined };
+            })
+          );
+          
+          // Filtere nach Sprache
+          const filteredItems = itemsWithLanguage.filter(item => {
+            if (!languageFilter || languageFilter === 'Alle Sprachen') {
+              return true;
+            }
+            // Wenn Sprache nicht gefunden wurde, behalte Item (könnte ein Fehler sein)
+            if (!item.language) {
+              return true; // Behalte Items ohne Sprache, um nichts zu verlieren
+            }
+            return item.language === languageFilter;
+          });
+          
+          allItems.push(...filteredItems);
+          console.log(`Found ${items.length} items on page ${pageCount}, ${filteredItems.length} passen Sprachfilter (Total: ${allItems.length})`);
+        } else {
+          allItems.push(...items);
+          console.log(`Found ${items.length} items on page ${pageCount} (Total: ${allItems.length})`);
+        }
+        
         consecutiveEmptyPages = 0;
-        console.log(`Found ${items.length} items on page ${pageCount} (Total: ${allItems.length})`);
       } else {
         consecutiveEmptyPages++;
         console.log(`No items found on page ${pageCount}`);

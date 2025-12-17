@@ -8,6 +8,7 @@ export interface VintedProduct {
   condition: string;
   imageUrl: string;
   category: string;
+  language?: string;
 }
 
 export interface EbayResult {
