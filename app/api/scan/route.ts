@@ -164,7 +164,8 @@ export async function GET(request: Request) {
               const fees = ebayResult.price * 0.11; // eBay Gebühren ~11%
               const shipping = 4.50; // Geschätzter Versand
               profitAfterFees = ebayResult.price - vItem.price - fees - shipping;
-              roi = vItem.price > 0 ? (profitAfterFees / vItem.price) * 100 : 0;
+              // ROI = einfache prozentuale Differenz zwischen eBay und Vinted (ohne Gebühren)
+              roi = vItem.price > 0 ? ((ebayResult.price - vItem.price) / vItem.price) * 100 : 0;
             }
             
             // Alle Items hinzufügen, unabhängig von Profit

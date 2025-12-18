@@ -159,7 +159,8 @@ async function scanWithAI(): Promise<ArbitrageDeal[]> {
           },
           profit: profitRaw,
           profitAfterFees: profitAfterFees,
-          roi: (profitAfterFees / deal.vintedPrice) * 100,
+          // ROI = einfache prozentuale Differenz zwischen eBay und Vinted (ohne Gebühren)
+          roi: deal.vintedPrice > 0 ? ((deal.ebayPrice - deal.vintedPrice) / deal.vintedPrice) * 100 : 0,
           timestamp: new Date(),
           status: 'new'
         } as ArbitrageDeal;
