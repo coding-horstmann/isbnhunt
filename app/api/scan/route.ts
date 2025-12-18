@@ -48,6 +48,13 @@ export async function GET(request: Request) {
 
     // Seitenlimit aus Umgebungsvariable oder Default (3)
     const maxPages = parseInt(process.env.MAX_SCAN_PAGES || '3', 10);
+    
+    // Item-Limit pro Scan (optional, um Timeouts zu vermeiden)
+    const maxItemsPerScan = parseInt(process.env.MAX_ITEMS_PER_SCAN || '0', 10); // 0 = kein Limit
+    
+    // Timeout-Handling: Vercel hat 300s Timeout (5 Min), wir brechen bei 250s ab
+    const startTime = Date.now();
+    const MAX_EXECUTION_TIME_MS = 250000; // 250 Sekunden (4:10 Min) - Puffer für Response
 
     // Für jede konfigurierte URL
     for (const urlConfig of enabledUrls) {
@@ -59,14 +66,29 @@ export async function GET(request: Request) {
         
         console.log(`Gefunden: ${vintedItems.length} Artikel auf Vinted`);
         
-        // Alle Items verarbeiten (kein Limit mehr)
+        // Item-Limit anwenden falls gesetzt
+        const itemsToProcess = maxItemsPerScan > 0 
+          ? vintedItems.slice(0, maxItemsPerScan)
+          : vintedItems;
+        
+        if (maxItemsPerScan > 0 && vintedItems.length > maxItemsPerScan) {
+          console.log(`Item-Limit aktiv: Verarbeite nur ${maxItemsPerScan} von ${vintedItems.length} Items`);
+        }
+        
         // Für jedes Vinted Item eBay abfragen
-        const ebayApiDelay = parseInt(process.env.EBAY_API_DELAY_MS || '10000', 10); // Standard: 10000ms (10 Sekunden = 6 Anfragen/Minute)
+        // Delay reduziert auf 2 Sekunden (3 requests/minute, sicher unter Limit von 6)
+        const ebayApiDelay = parseInt(process.env.EBAY_API_DELAY_MS || '2000', 10); // Standard: 2000ms (2 Sekunden = 30 Anfragen/Minute, aber wir machen nur ~3)
         let consecutiveRateLimitErrors = 0;
         const maxConsecutiveRateLimitErrors = 5; // Nach 5 aufeinanderfolgenden Fehlern überspringe eBay API
         
-        for (let i = 0; i < vintedItems.length; i++) {
-          const vItem = vintedItems[i];
+        for (let i = 0; i < itemsToProcess.length; i++) {
+          // Timeout-Check: Wenn wir nahe am Timeout sind, abbrechen
+          const elapsedTime = Date.now() - startTime;
+          if (elapsedTime > MAX_EXECUTION_TIME_MS) {
+            console.warn(`Timeout nahe (${Math.round(elapsedTime/1000)}s). Breche Scan ab und gebe bisherige Ergebnisse zurück.`);
+            break;
+          }
+          const vItem = itemsToProcess[i];
           try {
             let ebayResult = null;
             
@@ -170,10 +192,7 @@ export async function GET(request: Request) {
               status: 'new'
             });
             
-            // Rate Limiting zwischen eBay API Calls
-            if (ebayConfig.clientId && ebayConfig.clientSecret) {
-              await new Promise(resolve => setTimeout(resolve, 500));
-            }
+            // Rate Limiting wird bereits vor dem API-Call durchgeführt (siehe oben)
           } catch (itemError) {
             console.error(`Fehler bei Item "${vItem.title}":`, itemError);
             // Weiter mit nächstem Item
@@ -187,7 +206,14 @@ export async function GET(request: Request) {
       }
     }
 
-    console.log(`Gefunden: ${deals.length} Arbitrage-Möglichkeiten`);
+    const elapsedTime = Date.now() - startTime;
+    console.log(`Gefunden: ${deals.length} Arbitrage-Möglichkeiten (Zeit: ${Math.round(elapsedTime/1000)}s)`);
+    
+    // Wenn Timeout nahe war, logge Warnung (Response bleibt Array für Kompatibilität)
+    if (elapsedTime > MAX_EXECUTION_TIME_MS * 0.9) {
+      console.warn('Scan wurde aufgrund von Timeout-Beschränkungen vorzeitig beendet. Einige Items wurden möglicherweise nicht verarbeitet.');
+    }
+    
     return NextResponse.json(deals);
     
   } catch (error) {

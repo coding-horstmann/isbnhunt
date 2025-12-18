@@ -99,9 +99,10 @@ Bearbeite `config/vinted-urls.json` um URLs hinzuzufügen oder zu entfernen:
 4. Deploy!
 
 **Wichtig für Vercel:**
-- Hobby Plan: 10s Timeout pro Request
-- Pro Plan: 60s Timeout pro Request
+- Hobby Plan: 10s Timeout pro Request (empfohlen: MAX_ITEMS_PER_SCAN=20-30)
+- Pro Plan: 300s Timeout pro Request (empfohlen: MAX_ITEMS_PER_SCAN=100-150)
 - Rate Limiting ist wichtig um nicht gesperrt zu werden
+- Timeout-Handling: Scan bricht automatisch bei 250s ab und gibt bisherige Ergebnisse zurück
 
 ## Bot-Schutz
 
