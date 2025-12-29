@@ -211,11 +211,35 @@ async function scrapeVintedPage(url: string): Promise<{ items: any[], hasNextPag
         'Sec-Fetch-Site': 'same-origin',
       },
       timeout: 30000,
+      validateStatus: (status) => status < 500, // Akzeptiere auch 4xx für Debugging
     });
+    
+    console.log(`[SCRAPER] HTTP Status: ${response.status} ${response.statusText}`);
+    
+    if (response.status !== 200) {
+      console.warn(`[SCRAPER] WARNUNG: Nicht-200 Status Code! Möglicherweise blockiert.`);
+      // Gib trotzdem die Daten zurück, falls vorhanden
+      if (!response.data || response.data.length < 100) {
+        throw new Error(`Vinted antwortet mit Status ${response.status}. Möglicherweise Bot-Schutz aktiv.`);
+      }
+    }
+    
     data = response.data;
-    console.log(`[SCRAPER] Seite geladen: ${data.length} Zeichen`);
-  } catch (error) {
-    console.error(`[SCRAPER] Fehler beim Laden der Seite:`, error);
+    console.log(`[SCRAPER] Seite geladen: ${data.length} Zeichen, Content-Type: ${response.headers['content-type']}`);
+    
+    // Prüfe ob es eine Redirect-Seite oder Fehlerseite ist
+    if (data.includes('redirect') || data.includes('Redirect') || data.includes('location.href')) {
+      console.warn(`[SCRAPER] WARNUNG: Seite enthält Redirect-Logik!`);
+    }
+  } catch (error: any) {
+    if (error.response) {
+      console.error(`[SCRAPER] HTTP Fehler: ${error.response.status} - ${error.response.statusText}`);
+      console.error(`[SCRAPER] Response Headers:`, JSON.stringify(error.response.headers));
+    } else if (error.request) {
+      console.error(`[SCRAPER] Keine Response erhalten. Request Details:`, error.message);
+    } else {
+      console.error(`[SCRAPER] Fehler beim Setup:`, error.message);
+    }
     throw error;
   }
 
@@ -227,8 +251,36 @@ async function scrapeVintedPage(url: string): Promise<{ items: any[], hasNextPag
   console.log(`[SCRAPER] Body-Text Länge: ${bodyText.length} Zeichen`);
   
   // Prüfe auf Bot-Schutz oder Fehlerseiten
-  if (bodyText.includes('Access Denied') || bodyText.includes('bot') || bodyText.length < 1000) {
-    console.warn(`[SCRAPER] WARNUNG: Möglicherweise Bot-Schutz aktiv oder leere Seite. Body-Länge: ${bodyText.length}`);
+  const suspiciousPatterns = [
+    'Access Denied',
+    'access denied',
+    'bot',
+    'blocked',
+    'captcha',
+    'Cloudflare',
+    '403',
+    'Forbidden'
+  ];
+  
+  const foundPatterns = suspiciousPatterns.filter(pattern => 
+    bodyText.toLowerCase().includes(pattern.toLowerCase()) || 
+    data.toLowerCase().includes(pattern.toLowerCase())
+  );
+  
+  if (foundPatterns.length > 0) {
+    console.warn(`[SCRAPER] WARNUNG: Verdächtige Muster gefunden: ${foundPatterns.join(', ')}`);
+  }
+  
+  if (bodyText.length < 1000) {
+    console.warn(`[SCRAPER] WARNUNG: Sehr wenig Content (${bodyText.length} Zeichen). Möglicherweise leere Seite oder Bot-Schutz.`);
+    // Zeige ersten 500 Zeichen für Debugging
+    console.log(`[SCRAPER] Erste 500 Zeichen des Body-Texts: ${bodyText.substring(0, 500)}`);
+  }
+  
+  // Prüfe ob es ein React/SPA ist (könnte bedeuten, dass Content dynamisch geladen wird)
+  const hasReact = data.includes('react') || data.includes('React') || data.includes('__REACT');
+  if (hasReact) {
+    console.log(`[SCRAPER] Seite verwendet React - Content könnte dynamisch geladen werden`);
   }
 
   // Vinted Selektoren - erweiterte Varianten für verschiedene Seitenlayouts
