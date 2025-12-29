@@ -11,15 +11,16 @@ export async function GET(request: Request) {
     const deals: ArbitrageDeal[] = [];
     
     // eBay API Konfiguration aus Umgebungsvariablen (OAuth2)
+    // Unterstützt sowohl EBAY_CLIENT_SECRET als auch EBAY_CERT_ID (für Kompatibilität)
     const ebayConfig = {
-      clientId: process.env.EBAY_CLIENT_ID || '',
-      clientSecret: process.env.EBAY_CLIENT_SECRET || '',
+      clientId: process.env.EBAY_CLIENT_ID || process.env.EBAY_APP_ID || '',
+      clientSecret: process.env.EBAY_CLIENT_SECRET || process.env.EBAY_CERT_ID || '',
       marketplaceId: process.env.EBAY_MARKETPLACE_ID || 'EBAY_DE' // EBAY_DE, EBAY_US, etc.
     };
 
     // Prüfe ob eBay API konfiguriert ist
     if (!ebayConfig.clientId || !ebayConfig.clientSecret) {
-      console.warn('eBay OAuth2 API nicht konfiguriert. Setze EBAY_CLIENT_ID und EBAY_CLIENT_SECRET in Umgebungsvariablen.');
+      console.warn('eBay OAuth2 API nicht konfiguriert. Setze EBAY_CLIENT_ID (oder EBAY_APP_ID) und EBAY_CLIENT_SECRET (oder EBAY_CERT_ID) in Umgebungsvariablen.');
     }
 
     // URLs aus Request-Query oder Standard-URLs verwenden

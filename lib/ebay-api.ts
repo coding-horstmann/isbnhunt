@@ -118,7 +118,7 @@ export const searchEbayByTitle = async (
   try {
     // Prüfe ob Credentials vorhanden sind
     if (!config.clientId || !config.clientSecret) {
-      console.warn('eBay OAuth2 Credentials fehlen. Setze EBAY_CLIENT_ID und EBAY_CLIENT_SECRET.');
+      console.warn('eBay OAuth2 Credentials fehlen. Setze EBAY_CLIENT_ID (oder EBAY_APP_ID) und EBAY_CLIENT_SECRET (oder EBAY_CERT_ID).');
       return null;
     }
 

@@ -32,14 +32,16 @@ export async function GET(request: Request) {
     const deals: ArbitrageDeal[] = [];
     
     // eBay API Konfiguration
+    // Unterstützt sowohl EBAY_CLIENT_SECRET als auch EBAY_CERT_ID (für Kompatibilität)
     const ebayConfig = {
-      clientId: process.env.EBAY_CLIENT_ID || '',
-      clientSecret: process.env.EBAY_CLIENT_SECRET || '',
+      clientId: process.env.EBAY_CLIENT_ID || process.env.EBAY_APP_ID || '',
+      clientSecret: process.env.EBAY_CLIENT_SECRET || process.env.EBAY_CERT_ID || '',
       marketplaceId: process.env.EBAY_MARKETPLACE_ID || 'EBAY_DE'
     };
 
     // Debug: Log eBay Config Status
-    console.log(`[CRON] eBay API Config: ClientID=${ebayConfig.clientId ? 'gesetzt' : 'FEHLT'}, ClientSecret=${ebayConfig.clientSecret ? 'gesetzt' : 'FEHLT'}`);
+    const secretSource = process.env.EBAY_CLIENT_SECRET ? 'EBAY_CLIENT_SECRET' : (process.env.EBAY_CERT_ID ? 'EBAY_CERT_ID' : 'FEHLT');
+    console.log(`[CRON] eBay API Config: ClientID=${ebayConfig.clientId ? 'gesetzt' : 'FEHLT'}, ClientSecret=${ebayConfig.clientSecret ? `gesetzt (${secretSource})` : 'FEHLT'}`);
 
     // E-Mail Konfiguration
     const emailConfig = {
