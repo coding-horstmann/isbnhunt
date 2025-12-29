@@ -49,21 +49,43 @@ async function getEbayAccessToken(config: EbayApiConfig): Promise<string> {
   }
 
   try {
-    // Debug: Zeige Credential-Info (ohne das Secret zu verraten)
-    const clientIdPreview = config.clientId ? `${config.clientId.substring(0, 8)}...${config.clientId.substring(config.clientId.length - 4)}` : 'LEER';
-    const secretLength = config.clientSecret?.length || 0;
-    console.log(`[eBay] Token-Request: ClientID=${clientIdPreview} (${config.clientId?.length || 0} Zeichen), Secret=${secretLength} Zeichen`);
+    // Bereinige Credentials - entferne alle ungültigen Zeichen
+    // Railway kann manchmal Anführungszeichen, Zeilenumbrüche oder andere Zeichen hinzufügen
+    const cleanClientId = (config.clientId || '')
+      .trim()
+      .replace(/^["'=\s]+/, '') // Entferne führende ", ', =, Leerzeichen
+      .replace(/["'=\s]+$/, '') // Entferne nachfolgende ", ', =, Leerzeichen
+      .replace(/[\r\n]/g, '');   // Entferne Zeilenumbrüche
     
-    // Prüfe auf Leerzeichen am Anfang/Ende
-    if (config.clientId !== config.clientId?.trim()) {
-      console.warn('[eBay] WARNUNG: EBAY_CLIENT_ID enthält führende/nachfolgende Leerzeichen!');
+    const cleanSecret = (config.clientSecret || '')
+      .trim()
+      .replace(/^["'=\s]+/, '')
+      .replace(/["'=\s]+$/, '')
+      .replace(/[\r\n]/g, '');
+    
+    // Debug: Zeige Credential-Info
+    const clientIdPreview = cleanClientId ? `${cleanClientId.substring(0, 8)}...${cleanClientId.substring(cleanClientId.length - 4)}` : 'LEER';
+    console.log(`[eBay] Token-Request: ClientID=${clientIdPreview} (${cleanClientId.length} Zeichen, original: ${config.clientId?.length || 0}), Secret=${cleanSecret.length} Zeichen`);
+    
+    // Prüfe ob Bereinigung nötig war
+    if (config.clientId !== cleanClientId) {
+      console.warn(`[eBay] WARNUNG: EBAY_CLIENT_ID wurde bereinigt! Original hatte ${config.clientId?.length || 0} Zeichen, bereinigt: ${cleanClientId.length}`);
+      console.warn(`[eBay] Erste 3 Zeichen (Hex): ${Buffer.from(config.clientId?.substring(0, 3) || '').toString('hex')}`);
     }
-    if (config.clientSecret !== config.clientSecret?.trim()) {
-      console.warn('[eBay] WARNUNG: EBAY_CLIENT_SECRET enthält führende/nachfolgende Leerzeichen!');
+    if (config.clientSecret !== cleanSecret) {
+      console.warn(`[eBay] WARNUNG: EBAY_CLIENT_SECRET wurde bereinigt!`);
     }
     
-    // Basic Auth Header erstellen
-    const credentials = Buffer.from(`${config.clientId?.trim()}:${config.clientSecret?.trim()}`).toString('base64');
+    // Validiere Längen
+    if (cleanClientId.length < 30) {
+      console.error(`[eBay] FEHLER: Client ID zu kurz (${cleanClientId.length} Zeichen). Erwartet: ~39 Zeichen.`);
+    }
+    if (cleanSecret.length < 30) {
+      console.error(`[eBay] FEHLER: Client Secret zu kurz (${cleanSecret.length} Zeichen). Erwartet: ~36 Zeichen.`);
+    }
+    
+    // Basic Auth Header erstellen mit bereinigten Credentials
+    const credentials = Buffer.from(`${cleanClientId}:${cleanSecret}`).toString('base64');
 
     const response = await axios.post<EbayTokenResponse>(
       'https://api.ebay.com/identity/v1/oauth2/token',
