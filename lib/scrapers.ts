@@ -271,10 +271,12 @@ async function scrapeVintedPage(url: string): Promise<{ items: any[], hasNextPag
     console.warn(`[SCRAPER] WARNUNG: Verdächtige Muster gefunden: ${foundPatterns.join(', ')}`);
   }
   
-  if (bodyText.length < 1000) {
-    console.warn(`[SCRAPER] WARNUNG: Sehr wenig Content (${bodyText.length} Zeichen). Möglicherweise leere Seite oder Bot-Schutz.`);
+  if (bodyText.length < 5000) {
+    console.warn(`[SCRAPER] WARNUNG: Wenig Content (${bodyText.length} Zeichen). Möglicherweise leere Seite oder Bot-Schutz.`);
     // Zeige ersten 500 Zeichen für Debugging
     console.log(`[SCRAPER] Erste 500 Zeichen des Body-Texts: ${bodyText.substring(0, 500)}`);
+  } else {
+    console.log(`[SCRAPER] Content OK: ${Math.round(bodyText.length / 1000)}k Zeichen`);
   }
   
   // Prüfe ob es ein React/SPA ist (könnte bedeuten, dass Content dynamisch geladen wird)

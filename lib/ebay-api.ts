@@ -49,8 +49,21 @@ async function getEbayAccessToken(config: EbayApiConfig): Promise<string> {
   }
 
   try {
+    // Debug: Zeige Credential-Info (ohne das Secret zu verraten)
+    const clientIdPreview = config.clientId ? `${config.clientId.substring(0, 8)}...${config.clientId.substring(config.clientId.length - 4)}` : 'LEER';
+    const secretLength = config.clientSecret?.length || 0;
+    console.log(`[eBay] Token-Request: ClientID=${clientIdPreview} (${config.clientId?.length || 0} Zeichen), Secret=${secretLength} Zeichen`);
+    
+    // Prüfe auf Leerzeichen am Anfang/Ende
+    if (config.clientId !== config.clientId?.trim()) {
+      console.warn('[eBay] WARNUNG: EBAY_CLIENT_ID enthält führende/nachfolgende Leerzeichen!');
+    }
+    if (config.clientSecret !== config.clientSecret?.trim()) {
+      console.warn('[eBay] WARNUNG: EBAY_CLIENT_SECRET enthält führende/nachfolgende Leerzeichen!');
+    }
+    
     // Basic Auth Header erstellen
-    const credentials = Buffer.from(`${config.clientId}:${config.clientSecret}`).toString('base64');
+    const credentials = Buffer.from(`${config.clientId?.trim()}:${config.clientSecret?.trim()}`).toString('base64');
 
     const response = await axios.post<EbayTokenResponse>(
       'https://api.ebay.com/identity/v1/oauth2/token',
@@ -75,10 +88,20 @@ async function getEbayAccessToken(config: EbayApiConfig): Promise<string> {
       expiresAt: Date.now() + (expiresIn * 1000) - (5 * 60 * 1000) // 5 Minuten Puffer
     };
 
-    console.log('eBay OAuth2 Token erfolgreich abgerufen und gecacht');
+    console.log('[eBay] OAuth2 Token erfolgreich abgerufen und gecacht');
     return tokenCache.token;
   } catch (error: any) {
-    console.error('Fehler beim Abrufen des eBay OAuth2 Tokens:', error.response?.data || error.message);
+    console.error('[eBay] Fehler beim Abrufen des OAuth2 Tokens:', error.response?.data || error.message);
+    
+    // Mehr Details bei invalid_client
+    if (error.response?.data?.error === 'invalid_client') {
+      console.error('[eBay] HINWEIS: "invalid_client" bedeutet:');
+      console.error('[eBay] 1. EBAY_CLIENT_ID oder EBAY_CLIENT_SECRET ist falsch');
+      console.error('[eBay] 2. Die Credentials sind für Sandbox (api.sandbox.ebay.com) statt Production (api.ebay.com)');
+      console.error('[eBay] 3. Die App in eBay Developer Portal ist nicht aktiv');
+      console.error('[eBay] Prüfe: https://developer.ebay.com/my/keys');
+    }
+    
     throw new Error(`eBay OAuth2 Token-Fehler: ${error.response?.data?.error_description || error.message}`);
   }
 }
