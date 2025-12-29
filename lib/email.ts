@@ -20,37 +20,6 @@ function cleanEmail(email: string): string {
 }
 
 /**
- * Erstellt einen Nodemailer-Transporter für Gmail
- * Verwendet Port 587 mit STARTTLS (besser kompatibel mit Cloud-Hosting)
- */
-function createTransporter(config: EmailConfig) {
-  // Bereinige E-Mail-Adressen
-  const cleanFrom = cleanEmail(config.from);
-  const cleanPassword = (config.gmailAppPassword || '')
-    .trim()
-    .replace(/[\r\n\s]/g, ''); // Entferne Leerzeichen und Zeilenumbrüche
-  
-  console.log(`[EMAIL] Erstelle Transporter: FROM=${cleanFrom}, PASSWORD_LENGTH=${cleanPassword.length}`);
-  
-  return nodemailer.createTransport({
-    host: 'smtp.gmail.com',
-    port: 587, // Port 587 mit STARTTLS (besser für Cloud-Hosting)
-    secure: false, // STARTTLS
-    auth: {
-      user: cleanFrom,
-      pass: cleanPassword,
-    },
-    connectionTimeout: 30000, // 30 Sekunden
-    greetingTimeout: 30000,
-    socketTimeout: 30000,
-    tls: {
-      rejectUnauthorized: false,
-      ciphers: 'SSLv3'
-    }
-  });
-}
-
-/**
  * Formatiert einen Preis in Euro
  */
 function formatCurrency(amount: number): string {
@@ -63,16 +32,13 @@ function formatCurrency(amount: number): string {
 /**
  * Generiert HTML für die E-Mail mit Arbitrage-Deals
  */
-function generateEmailHTML(deals: ArbitrageDeal[], scanTime: Date): string {
+function generateEmailHTML(deals: ArbitrageDeal[], scanTime: Date, minRoi: number): string {
   const dealsHtml = deals.map(deal => `
     <tr style="border-bottom: 1px solid #e5e7eb;">
       <td style="padding: 12px; vertical-align: top;">
-        <div style="display: flex; align-items: center; gap: 12px;">
-          <img src="${deal.vinted.imageUrl}" alt="${deal.vinted.title}" style="width: 60px; height: 60px; object-fit: cover; border-radius: 8px; border: 1px solid #e5e7eb;" />
-          <div>
-            <strong style="color: #1f2937;">${deal.vinted.title}</strong><br/>
-            <span style="color: #6b7280; font-size: 12px;">${deal.vinted.condition} • ${deal.vinted.category}</span>
-          </div>
+        <div>
+          <strong style="color: #1f2937;">${deal.vinted.title}</strong><br/>
+          <span style="color: #6b7280; font-size: 12px;">${deal.vinted.condition} • ${deal.vinted.category}</span>
         </div>
       </td>
       <td style="padding: 12px; text-align: right; color: #1f2937; font-weight: 500;">${formatCurrency(deal.vinted.price)}</td>
@@ -115,7 +81,7 @@ function generateEmailHTML(deals: ArbitrageDeal[], scanTime: Date): string {
             <div style="font-size: 12px; color: #6b7280;">Deals gefunden</div>
           </div>
           <div style="text-align: center;">
-            <div style="font-size: 28px; font-weight: 700; color: #3b82f6;">≥150%</div>
+            <div style="font-size: 28px; font-weight: 700; color: #3b82f6;">≥${minRoi}%</div>
             <div style="font-size: 12px; color: #6b7280;">Min. ROI</div>
           </div>
         </div>
@@ -139,7 +105,7 @@ function generateEmailHTML(deals: ArbitrageDeal[], scanTime: Date): string {
             </table>
           ` : `
             <div style="text-align: center; padding: 48px; color: #6b7280;">
-              <p style="font-size: 16px;">Keine Deals mit ROI ≥ 150% gefunden.</p>
+              <p style="font-size: 16px;">Keine Deals mit ROI ≥ ${minRoi}% gefunden.</p>
               <p style="font-size: 14px;">Der nächste Scan läuft automatisch in 2 Stunden.</p>
             </div>
           `}
@@ -158,8 +124,80 @@ function generateEmailHTML(deals: ArbitrageDeal[], scanTime: Date): string {
 }
 
 /**
+ * Sendet E-Mail über Resend API (HTTP-basiert, funktioniert auf Railway)
+ */
+async function sendViaResend(
+  to: string,
+  subject: string,
+  html: string,
+  resendApiKey: string
+): Promise<void> {
+  console.log(`[EMAIL] Sende via Resend API...`);
+  
+  const response = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${resendApiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      from: 'VintedHunter <onboarding@resend.dev>', // Resend's Default-Absender
+      to: [to],
+      subject: subject,
+      html: html,
+    }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(`Resend API Fehler: ${JSON.stringify(error)}`);
+  }
+
+  const result = await response.json();
+  console.log(`[EMAIL] Resend erfolgreich: ${result.id}`);
+}
+
+/**
+ * Sendet E-Mail über Gmail SMTP (Fallback)
+ */
+async function sendViaGmail(
+  from: string,
+  to: string,
+  subject: string,
+  html: string,
+  password: string
+): Promise<void> {
+  console.log(`[EMAIL] Sende via Gmail SMTP...`);
+  
+  const transporter = nodemailer.createTransport({
+    host: 'smtp.gmail.com',
+    port: 587,
+    secure: false,
+    auth: {
+      user: from,
+      pass: password,
+    },
+    connectionTimeout: 30000,
+    greetingTimeout: 30000,
+    socketTimeout: 30000,
+    tls: {
+      rejectUnauthorized: false,
+    }
+  });
+
+  await transporter.sendMail({
+    from: `VintedHunter <${from}>`,
+    to: to,
+    subject: subject,
+    html: html,
+  });
+  
+  console.log(`[EMAIL] Gmail SMTP erfolgreich`);
+}
+
+/**
  * Sendet eine E-Mail mit Arbitrage-Deals
- * Nur Deals mit ROI >= minRoi werden einbezogen
+ * Verwendet Resend API (HTTP) wenn RESEND_API_KEY gesetzt, sonst Gmail SMTP
  */
 export async function sendArbitrageEmail(
   deals: ArbitrageDeal[],
@@ -176,49 +214,41 @@ export async function sendArbitrageEmail(
     // Bereinige E-Mail-Adressen
     const cleanFrom = cleanEmail(config.from);
     const cleanTo = cleanEmail(config.to);
+    const cleanPassword = (config.gmailAppPassword || '').trim().replace(/[\r\n\s]/g, '');
     
     console.log(`[EMAIL] Sende E-Mail mit ${filteredDeals.length} Deals (ROI >= ${validMinRoi}%)`);
-    console.log(`[EMAIL] FROM: "${cleanFrom}" (original: ${config.from?.length} Zeichen)`);
-    console.log(`[EMAIL] TO: "${cleanTo}" (original: ${config.to?.length} Zeichen)`);
+    console.log(`[EMAIL] TO: "${cleanTo}"`);
     
-    // Prüfe ob Bereinigung nötig war
-    if (config.from !== cleanFrom) {
-      console.warn(`[EMAIL] WARNUNG: EMAIL_FROM wurde bereinigt!`);
-    }
-    if (config.to !== cleanTo) {
-      console.warn(`[EMAIL] WARNUNG: EMAIL_TO wurde bereinigt!`);
-    }
-    
-    // Wenn keine Deals den Filter erfüllen, trotzdem E-Mail senden (mit Info)
-    const transporter = createTransporter(config);
+    // Generiere E-Mail-Content
     const scanTime = new Date();
-    
-    const mailOptions = {
-      from: `VintedHunter <${cleanFrom}>`,
-      to: cleanTo,
-      subject: filteredDeals.length > 0 
-        ? `🎯 ${filteredDeals.length} Arbitrage-Deals gefunden (ROI ≥${validMinRoi}%)` 
-        : `📊 VintedHunter Scan: Keine Deals mit ROI ≥${validMinRoi}%`,
-      html: generateEmailHTML(filteredDeals, scanTime),
-    };
+    const subject = filteredDeals.length > 0 
+      ? `🎯 ${filteredDeals.length} Arbitrage-Deals gefunden (ROI ≥${validMinRoi}%)` 
+      : `📊 VintedHunter Scan: Keine Deals mit ROI ≥${validMinRoi}%`;
+    const html = generateEmailHTML(filteredDeals, scanTime, validMinRoi);
 
-    console.log(`[EMAIL] Versuche E-Mail zu senden...`);
+    // Prüfe ob Resend API Key vorhanden
+    const resendApiKey = process.env.RESEND_API_KEY;
     
-    // E-Mail mit längerem Timeout senden
-    await Promise.race([
-      transporter.sendMail(mailOptions),
-      new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('E-Mail Timeout nach 60 Sekunden')), 60000)
-      )
-    ]);
+    if (resendApiKey) {
+      // Methode 1: Resend API (HTTP-basiert, funktioniert auf Railway)
+      console.log(`[EMAIL] Verwende Resend API (HTTP)`);
+      await sendViaResend(cleanTo, subject, html, resendApiKey);
+    } else if (cleanFrom && cleanPassword) {
+      // Methode 2: Gmail SMTP (Fallback, funktioniert nicht auf Railway)
+      console.log(`[EMAIL] Verwende Gmail SMTP (Fallback)`);
+      console.log(`[EMAIL] HINWEIS: Gmail SMTP funktioniert nicht auf Railway! Setze RESEND_API_KEY für zuverlässigen E-Mail-Versand.`);
+      await sendViaGmail(cleanFrom, cleanTo, subject, html, cleanPassword);
+    } else {
+      throw new Error('Weder RESEND_API_KEY noch Gmail-Credentials konfiguriert');
+    }
     
     return {
       success: true,
-      message: `E-Mail erfolgreich an ${config.to} gesendet`,
+      message: `E-Mail erfolgreich an ${cleanTo} gesendet`,
       filteredCount: filteredDeals.length
     };
   } catch (error) {
-    console.error('E-Mail Fehler:', error);
+    console.error('[EMAIL] Fehler:', error);
     return {
       success: false,
       message: error instanceof Error ? error.message : 'Unbekannter E-Mail-Fehler',
@@ -226,4 +256,3 @@ export async function sendArbitrageEmail(
     };
   }
 }
-
