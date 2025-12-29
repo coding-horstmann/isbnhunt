@@ -31,9 +31,13 @@ function formatCurrency(amount: number): string {
 
 /**
  * Generiert HTML für die E-Mail mit Arbitrage-Deals
+ * Deals werden nach ROI sortiert (höchster ROI zuerst)
  */
 function generateEmailHTML(deals: ArbitrageDeal[], scanTime: Date, minRoi: number): string {
-  const dealsHtml = deals.map(deal => `
+  // Sortiere Deals nach ROI (absteigend - höchster ROI zuerst)
+  const sortedDeals = [...deals].sort((a, b) => b.roi - a.roi);
+  
+  const dealsHtml = sortedDeals.map(deal => `
     <tr style="border-bottom: 1px solid #e5e7eb;">
       <td style="padding: 12px; vertical-align: top;">
         <div>
