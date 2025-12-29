@@ -8,12 +8,14 @@ Ein automatisiertes Tool zum Finden von Arbitrage-Möglichkeiten zwischen Vinted
 - 💰 **eBay API Integration** für realistische Preisvergleiche
 - 🤖 **KI-Fallback** mit Gemini (optional ein/ausschaltbar)
 - 📊 **Dashboard** mit Profit- und ROI-Analyse
+- ⏰ **Automatische Cron-Jobs** alle 2 Stunden (8:00 - 20:00 Uhr)
+- 📧 **E-Mail Reports** für Deals mit hohem ROI
 - ⚙️ **Konfigurierbare URLs** für verschiedene Kategorien
 - 🛡️ **Rate Limiting** zum Schutz vor Bot-Erkennung
 
 ## Installation
 
-**Prerequisites:** Node.js 18+
+**Prerequisites:** Node.js 20+
 
 1. Dependencies installieren:
 ```bash
@@ -25,17 +27,18 @@ npm install
 Erstelle eine `.env.local` Datei basierend auf `env.example`:
 
 ```env
-# Gemini AI API Key (optional - nur für KI-Fallback)
-GEMINI_API_KEY=your_gemini_api_key_here
-
 # eBay API Konfiguration (OAuth2 - erforderlich für echte Preise)
-# Erhältlich von: https://developer.ebay.com/
 EBAY_CLIENT_ID=your_ebay_client_id_here
 EBAY_CLIENT_SECRET=your_ebay_client_secret_here
 
-# eBay Marketplace ID (Standard: EBAY_DE für Deutschland)
-# Verfügbare IDs: EBAY_DE, EBAY_US, EBAY_GB, etc.
-EBAY_MARKETPLACE_ID=EBAY_DE
+# Max. Seiten pro Kategorie beim Scraping
+MAX_SCAN_PAGES=3
+
+# E-Mail Reports (optional)
+EMAIL_FROM=your_gmail@gmail.com
+EMAIL_TO=recipient@example.com
+GMAIL_APP_PASSWORD=xxxx xxxx xxxx xxxx
+MIN_ROI_EMAIL=150
 ```
 
 3. App starten:
@@ -77,48 +80,74 @@ Bearbeite `config/vinted-urls.json` um URLs hinzuzufügen oder zu entfernen:
 3. Kopiere `Client ID` (App ID) und `Client Secret` in deine `.env.local`
 4. Die App verwendet automatisch OAuth2 Token-Caching (Token wird 2 Stunden gecacht)
 
-## Verwendung
+### E-Mail Reports konfigurieren
 
-1. **KI-Toggle**: Aktiviere/deaktiviere den Gemini AI Fallback im Dashboard
-2. **Scan starten**: Klicke auf "Start Scan" um die konfigurierten Vinted URLs zu durchsuchen
-3. **Ergebnisse analysieren**: Die App zeigt gefundene Arbitrage-Möglichkeiten mit Profit und ROI
+Um automatische E-Mail-Reports zu erhalten:
+
+1. **Gmail App-Passwort erstellen:**
+   - Gehe zu https://myaccount.google.com/security
+   - Aktiviere 2-Faktor-Authentifizierung
+   - Gehe zu https://myaccount.google.com/apppasswords
+   - Erstelle ein neues App-Passwort für "VintedHunter"
+
+2. **Umgebungsvariablen setzen:**
+   - `EMAIL_FROM` = Deine Gmail-Adresse
+   - `EMAIL_TO` = Empfänger für die Reports
+   - `GMAIL_APP_PASSWORD` = Das 16-stellige App-Passwort
+   - `MIN_ROI_EMAIL` = Minimaler ROI für E-Mail-Benachrichtigung (Standard: 150)
+
+## Automatische Scans (Cron-Job)
+
+Die App führt automatisch alle 2 Stunden einen Scan durch:
+- **Zeiten:** 8:00, 10:00, 12:00, 14:00, 16:00, 18:00, 20:00 Uhr (Europe/Berlin)
+- **E-Mail Reports:** Werden nach jedem Scan gesendet (nur Deals mit ROI ≥ MIN_ROI_EMAIL)
+
+Der Cron-Job kann auch manuell über `/api/cron` oder die `/results`-Seite ausgelöst werden.
+
+## Seiten
+
+- `/` - Dashboard mit manuellem Scan
+- `/results` - Ergebnisse des automatischen Scans
+- `/settings` - Einstellungen
 
 ## Architektur
 
-- **Frontend**: React + TypeScript + Vite
+- **Frontend**: React + TypeScript + Next.js
 - **Backend**: Next.js API Routes
 - **Scraping**: Axios + Cheerio (Vinted)
 - **API**: eBay Browse API mit OAuth2 (automatisches Token-Caching)
+- **Cron**: node-cron für automatische Scans
+- **E-Mail**: Nodemailer mit Gmail
 - **KI**: Google Gemini (optional)
-
-## Deployment auf Vercel
-
-1. Push zu GitHub
-2. Verbinde Repository mit Vercel
-3. Setze Umgebungsvariablen in Vercel Dashboard
-4. Deploy!
-
-**Wichtig für Vercel:**
-- Hobby Plan: 10s Timeout pro Request (empfohlen: MAX_ITEMS_PER_SCAN=20-30)
-- Pro Plan: 300s Timeout pro Request (empfohlen: MAX_ITEMS_PER_SCAN=100-150)
-- Rate Limiting ist wichtig um nicht gesperrt zu werden
-- Timeout-Handling: Scan bricht automatisch bei 250s ab und gibt bisherige Ergebnisse zurück
 
 ## Deployment auf Railway
 
 1. Push zu GitHub
 2. Verbinde Repository mit Railway
-3. Setze Umgebungsvariablen in Railway Dashboard
-4. Stelle sicher, dass der Service als "Public" markiert ist
-5. **Domain finden/erstellen:**
-   - Gehe zu Service → Settings → Networking
-   - Falls keine Domain angezeigt wird, klicke auf "Generate Domain" oder "Create Public Domain"
-   - Die Domain sollte das Format haben: `vintedcron-production-xxxx.up.railway.app`
+3. **Umgebungsvariablen setzen:**
+   - Gehe zu deinem **Service** (nicht Project Settings!)
+   - Klicke auf den Tab **"Variables"**
+   - Füge folgende Variablen hinzu:
+
+   | Variable | Erforderlich | Beschreibung |
+   |----------|-------------|--------------|
+   | `EBAY_CLIENT_ID` | ✅ | eBay API Client ID |
+   | `EBAY_CLIENT_SECRET` | ✅ | eBay API Client Secret |
+   | `MAX_SCAN_PAGES` | ❌ | Seiten pro Kategorie (Standard: 3) |
+   | `APP_PASSWORD` | ❌ | Login-Schutz für die App |
+   | `EMAIL_FROM` | ❌ | Gmail-Adresse für Reports |
+   | `EMAIL_TO` | ❌ | Empfänger der Reports |
+   | `GMAIL_APP_PASSWORD` | ❌ | Gmail App-Passwort |
+   | `MIN_ROI_EMAIL` | ❌ | Min. ROI für E-Mail (Standard: 150) |
+
+4. **Domain generieren:**
+   - Gehe zu deinem **Service** → **Settings** → **Networking**
+   - Klicke auf **"Generate Domain"**
 
 **Wichtig für Railway:**
-- Der Service muss als "Public" markiert sein, damit eine Domain generiert wird
-- Der Server läuft automatisch auf dem PORT, den Railway setzt (normalerweise 8080)
-- Railway unterstützt mehrere Services mit eigenen Domains pro Projekt
+- Der Cron-Job läuft automatisch im Server (node-cron)
+- E-Mails werden nach jedem automatischen Scan gesendet
+- Der Server läuft auf dem PORT, den Railway setzt
 
 ## Bot-Schutz
 
