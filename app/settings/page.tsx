@@ -37,7 +37,7 @@ export default function SettingsPage() {
           console.error('Fehler beim Laden der URLs');
         }
       } else {
-        // Standard-URLs laden
+        // Standard-URLs laden (nur Sachbücher und Lehrbuch)
         setUrls([
           {
             id: 'sachbuecher-all',
@@ -47,17 +47,10 @@ export default function SettingsPage() {
             enabled: true
           },
           {
-            id: 'comics-manga-all',
-            name: 'Comics/Manga (Sehr gut, Neu, Neu mit Etikett)',
-            url: 'https://www.vinted.de/catalog?catalog[]=5425&status_ids[]=1&status_ids[]=2&status_ids[]=6&order=newest_first',
-            category: 'Bücher & Medien - Comics/Manga',
-            enabled: true
-          },
-          {
-            id: 'spiele-neu',
-            name: 'Spiele (Nur Neu)',
-            url: 'https://www.vinted.de/catalog?catalog[]=3026&status_ids[]=6&order=newest_first',
-            category: 'Unterhaltung - Spiele',
+            id: 'lehrbuch-all',
+            name: 'Lehrbuch (Sehr gut, Neu, Neu mit Etikett)',
+            url: 'https://www.vinted.de/catalog?search_id=29575455737&catalog[]=5426&status_ids[]=6&status_ids[]=1&status_ids[]=2&page=1&time=1766745422',
+            category: 'Bücher & Medien - Lehrbuch',
             enabled: true
           }
         ]);
