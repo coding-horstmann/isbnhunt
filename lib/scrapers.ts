@@ -193,24 +193,43 @@ async function scrapeVintedPage(url: string): Promise<{ items: any[], hasNextPag
   // Rate Limiting: 2-5 Sekunden Delay zwischen Requests
   await new Promise(resolve => setTimeout(resolve, 2000 + Math.random() * 3000));
   
-  const { data } = await axios.get(url, {
-    headers: {
-      'User-Agent': getRandomUserAgent(),
-      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-      'Accept-Language': 'de-DE,de;q=0.9,en-US;q=0.8,en;q=0.7',
-      'Accept-Encoding': 'gzip, deflate, br',
-      'Referer': 'https://www.vinted.de/',
-      'Connection': 'keep-alive',
-      'Upgrade-Insecure-Requests': '1',
-      'Sec-Fetch-Dest': 'document',
-      'Sec-Fetch-Mode': 'navigate',
-      'Sec-Fetch-Site': 'same-origin',
-    },
-    timeout: 30000,
-  });
+  console.log(`[SCRAPER] Lade Seite: ${url}`);
+  
+  let data: string;
+  try {
+    const response = await axios.get(url, {
+      headers: {
+        'User-Agent': getRandomUserAgent(),
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'de-DE,de;q=0.9,en-US;q=0.8,en;q=0.7',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'Referer': 'https://www.vinted.de/',
+        'Connection': 'keep-alive',
+        'Upgrade-Insecure-Requests': '1',
+        'Sec-Fetch-Dest': 'document',
+        'Sec-Fetch-Mode': 'navigate',
+        'Sec-Fetch-Site': 'same-origin',
+      },
+      timeout: 30000,
+    });
+    data = response.data;
+    console.log(`[SCRAPER] Seite geladen: ${data.length} Zeichen`);
+  } catch (error) {
+    console.error(`[SCRAPER] Fehler beim Laden der Seite:`, error);
+    throw error;
+  }
 
   const $ = cheerio.load(data);
   const items: any[] = [];
+  
+  // Debug: Prüfe ob Seite überhaupt Content hat
+  const bodyText = $('body').text();
+  console.log(`[SCRAPER] Body-Text Länge: ${bodyText.length} Zeichen`);
+  
+  // Prüfe auf Bot-Schutz oder Fehlerseiten
+  if (bodyText.includes('Access Denied') || bodyText.includes('bot') || bodyText.length < 1000) {
+    console.warn(`[SCRAPER] WARNUNG: Möglicherweise Bot-Schutz aktiv oder leere Seite. Body-Länge: ${bodyText.length}`);
+  }
 
   // Vinted Selektoren - erweiterte Varianten für verschiedene Seitenlayouts
   const selectors = [
@@ -227,11 +246,15 @@ async function scrapeVintedPage(url: string): Promise<{ items: any[], hasNextPag
   ];
 
   let foundItems = false;
+  console.log(`[SCRAPER] Teste ${selectors.length} Selektoren...`);
+  
   for (const selector of selectors) {
     const elements = $(selector);
+    console.log(`[SCRAPER] Selektor "${selector}": ${elements.length} Elemente gefunden`);
     
     if (elements.length > 0) {
       foundItems = true;
+      console.log(`[SCRAPER] Verwende Selektor "${selector}" mit ${elements.length} Elementen`);
       elements.each((_, element) => {
         const $el = $(element);
         
@@ -354,6 +377,11 @@ async function scrapeVintedPage(url: string): Promise<{ items: any[], hasNextPag
             language: language || undefined, // Sprache kann später von Produktseite geholt werden
             platform: 'vinted'
           });
+        } else {
+          // Debug: Log warum Item nicht hinzugefügt wurde
+          if (items.length < 5) { // Nur erste 5 für Debug
+            console.log(`[SCRAPER] Item übersprungen: title="${title?.substring(0, 50)}", url="${url?.substring(0, 50)}", isOnlyPrice=${isOnlyPrice}`);
+          }
         }
       });
       
@@ -364,10 +392,16 @@ async function scrapeVintedPage(url: string): Promise<{ items: any[], hasNextPag
     }
   }
 
+  console.log(`[SCRAPER] Nach CSS-Selektoren: ${items.length} Items gefunden`);
+  
   // Fallback: Suche nach JSON-Daten im HTML (Vinted nutzt manchmal JSON)
   if (!foundItems || items.length === 0) {
+    console.log(`[SCRAPER] Keine Items gefunden, versuche JSON-Extraktion...`);
     // Versuche JSON-Daten aus Script-Tags zu extrahieren
-    $('script[type="application/json"]').each((_, element) => {
+    const jsonScripts = $('script[type="application/json"]');
+    console.log(`[SCRAPER] Gefunden: ${jsonScripts.length} JSON Script-Tags`);
+    
+    jsonScripts.each((_, element) => {
       try {
         const jsonText = $(element).html();
         if (jsonText && jsonText.includes('items')) {
@@ -385,7 +419,11 @@ async function scrapeVintedPage(url: string): Promise<{ items: any[], hasNextPag
     
     // Fallback: Suche nach allen Links die zu /items/ führen
     if (items.length === 0) {
-      $('a[href*="/items/"]').each((_, element) => {
+      console.log(`[SCRAPER] Versuche Fallback: Suche nach /items/ Links...`);
+      const itemLinks = $('a[href*="/items/"]');
+      console.log(`[SCRAPER] Gefunden: ${itemLinks.length} Links zu /items/`);
+      
+      itemLinks.each((_, element) => {
         const $el = $(element);
         const title = $el.text().trim() || $el.attr('title') || '';
         const url = $el.attr('href');
@@ -409,6 +447,8 @@ async function scrapeVintedPage(url: string): Promise<{ items: any[], hasNextPag
     }
   }
 
+  console.log(`[SCRAPER] Final: ${items.length} Items extrahiert`);
+  
   // Prüfe auf nächste Seite
   let hasNextPage = false;
   let nextPageUrl: string | undefined;
@@ -473,13 +513,15 @@ function extractItemsFromJSON(data: any): any[] {
  */
 export const scrapeVintedCatalogUrl = async (catalogUrl: string, maxPages: number = 3, languageFilter?: string) => {
   try {
+    console.log(`[SCRAPER] Starte Scraping: maxPages=${maxPages}, languageFilter=${languageFilter || 'kein Filter'}`);
+    
     // Erweitere URL um Sprachfilter, falls angegeben
     let urlToScrape = catalogUrl;
     if (languageFilter && languageFilter !== 'Alle Sprachen') {
       urlToScrape = addLanguageFilterToUrl(catalogUrl, languageFilter);
-      console.log(`Starting scrape of Vinted catalog: ${urlToScrape} (Sprache: ${languageFilter})`);
+      console.log(`[SCRAPER] URL mit Sprachfilter: ${urlToScrape}`);
     } else {
-      console.log(`Starting scrape of Vinted catalog: ${urlToScrape}`);
+      console.log(`[SCRAPER] URL ohne Sprachfilter: ${urlToScrape}`);
     }
     
     const allItems: any[] = [];

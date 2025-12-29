@@ -82,8 +82,11 @@ export async function GET(request: Request) {
       try {
         console.log(`[CRON] Scraping: ${urlConfig.name}...`);
         
-        // Vinted Katalog scrapen (Standard: Deutsch)
-        const vintedItems = await scrapeVintedCatalogUrl(urlConfig.url, maxPages, 'Deutsch');
+        // Vinted Katalog scrapen
+        // Sprachfilter kann über Umgebungsvariable deaktiviert werden (VINTED_LANGUAGE_FILTER=)
+        const languageFilter = process.env.VINTED_LANGUAGE_FILTER || 'Deutsch';
+        console.log(`[CRON] Verwende Sprachfilter: ${languageFilter === '' ? 'KEIN FILTER' : languageFilter}`);
+        const vintedItems = await scrapeVintedCatalogUrl(urlConfig.url, maxPages, languageFilter || undefined);
         
         console.log(`[CRON] ${urlConfig.name}: ${vintedItems.length} Artikel gefunden`);
         
