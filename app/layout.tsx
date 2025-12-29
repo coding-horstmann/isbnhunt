@@ -2,8 +2,8 @@ import type { Metadata } from 'next';
 import '../styles/globals.css';
 
 export const metadata: Metadata = {
-  title: 'Vinted-eBay Arbitrage Finder',
-  description: 'Find arbitrage opportunities between Vinted and eBay',
+  title: 'VintedCron',
+  description: 'Automatischer Vinted Scanner mit eBay Preisvergleich',
   icons: {
     icon: '/icon.svg',
     apple: '/icon.svg',

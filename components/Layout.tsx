@@ -44,7 +44,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
             <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-primary to-blue-600 flex items-center justify-center">
               <LayoutDashboard className="h-5 w-5 text-white" />
             </div>
-            <span className="font-bold text-lg tracking-tight">Arbitrage<span className="text-primary">Finder</span></span>
+            <span className="font-bold text-lg tracking-tight">Vinted<span className="text-primary">Cron</span></span>
           </Link>
         </div>
 
@@ -64,7 +64,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
 
       {/* Mobile Header */}
       <div className="md:hidden fixed top-0 left-0 right-0 h-16 border-b border-slate-800 bg-background z-50 flex items-center justify-between px-4">
-        <Link href="/" className="font-bold">ArbitrageFinder</Link>
+        <Link href="/" className="font-bold">VintedCron</Link>
         <button 
           onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} 
           className="p-2 text-slate-400 hover:text-slate-100 transition-colors"

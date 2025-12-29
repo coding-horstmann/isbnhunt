@@ -1,4 +1,4 @@
-# VintedHunter - Arbitrage Finder
+# VintedCron
 
 Ein automatisiertes Tool zum Finden von Arbitrage-Möglichkeiten zwischen Vinted.de und eBay.de.
 
@@ -88,7 +88,7 @@ Um automatische E-Mail-Reports zu erhalten:
    - Gehe zu https://myaccount.google.com/security
    - Aktiviere 2-Faktor-Authentifizierung
    - Gehe zu https://myaccount.google.com/apppasswords
-   - Erstelle ein neues App-Passwort für "VintedHunter"
+   - Erstelle ein neues App-Passwort für "VintedCron"
 
 2. **Umgebungsvariablen setzen:**
    - `EMAIL_FROM` = Deine Gmail-Adresse

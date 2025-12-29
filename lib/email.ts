@@ -68,7 +68,7 @@ function generateEmailHTML(deals: ArbitrageDeal[], scanTime: Date, minRoi: numbe
         
         <!-- Header -->
         <div style="background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%); padding: 24px; text-align: center;">
-          <h1 style="color: white; margin: 0; font-size: 24px;">🎯 VintedHunter - Arbitrage Report</h1>
+          <h1 style="color: white; margin: 0; font-size: 24px;">🎯 VintedCron - Arbitrage Report</h1>
           <p style="color: rgba(255,255,255,0.9); margin: 8px 0 0 0; font-size: 14px;">
             Automatischer Scan vom ${scanTime.toLocaleDateString('de-DE')} um ${scanTime.toLocaleTimeString('de-DE')}
           </p>
@@ -114,7 +114,7 @@ function generateEmailHTML(deals: ArbitrageDeal[], scanTime: Date, minRoi: numbe
         <!-- Footer -->
         <div style="background-color: #1f2937; padding: 16px 24px; text-align: center;">
           <p style="color: #9ca3af; margin: 0; font-size: 12px;">
-            VintedHunter Arbitrage Finder • Automatischer Scan alle 2 Stunden (8:00 - 21:00 Uhr)
+            VintedCron • Automatischer Scan alle 2 Stunden (8:00 - 21:00 Uhr)
           </p>
         </div>
       </div>
@@ -137,7 +137,7 @@ async function sendViaResend(
   
   // Verwende verifizierte Domain oder Fallback auf Test-Absender
   // Format: "Name <email@domain.de>" oder "email@domain.de"
-  const from = fromEmail || 'VintedHunter <onboarding@resend.dev>';
+  const from = fromEmail || 'VintedCron <onboarding@resend.dev>';
   
   console.log(`[EMAIL] Absender: ${from}`);
   
@@ -193,7 +193,7 @@ async function sendViaGmail(
   });
 
   await transporter.sendMail({
-    from: `VintedHunter <${from}>`,
+      from: `VintedCron <${from}>`,
     to: to,
     subject: subject,
     html: html,
@@ -230,7 +230,7 @@ export async function sendArbitrageEmail(
     const scanTime = new Date();
     const subject = filteredDeals.length > 0 
       ? `🎯 ${filteredDeals.length} Arbitrage-Deals gefunden (ROI ≥${validMinRoi}%)` 
-      : `📊 VintedHunter Scan: Keine Deals mit ROI ≥${validMinRoi}%`;
+      : `📊 VintedCron Scan: Keine Deals mit ROI ≥${validMinRoi}%`;
     const html = generateEmailHTML(filteredDeals, scanTime, validMinRoi);
 
     // Prüfe ob Resend API Key vorhanden
