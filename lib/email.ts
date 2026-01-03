@@ -141,7 +141,7 @@ function generateEmailHTML(deals: ArbitrageDeal[], scanTime: Date, minRoi: numbe
         ${categoryStatsHtml}
 
         <!-- eBay-API-Statistiken -->
-        ${ebayApiStats && ebayApiStats.itemsSkippedDueToTimeout > 0 ? `
+        ${ebayApiStats && (ebayApiStats.itemsSkippedDueToTimeout > 0 || ebayApiStats.itemsWithFallbackOnly > 0) ? `
           <div style="padding: 24px; background-color: #fef3c7; border-top: 1px solid #e5e7eb; border-bottom: 1px solid #e5e7eb;">
             <h2 style="color: #92400e; font-size: 18px; font-weight: 600; margin: 0 0 16px 0;">⚠️ eBay-API-Hinweis</h2>
             <div style="color: #78350f; font-size: 14px; line-height: 1.6;">
