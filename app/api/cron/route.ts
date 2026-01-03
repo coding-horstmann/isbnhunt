@@ -170,12 +170,16 @@ export async function GET(request: Request) {
             let profitAfterFees = 0;
             let roi = 0;
             
+            // Tracking für eBay-API-Statistiken
             if (ebayResult.price > 0 && vItem.price > 0) {
               profit = ebayResult.price - vItem.price;
               const fees = ebayResult.price * 0.11;
               const shipping = 4.50;
               profitAfterFees = ebayResult.price - vItem.price - fees - shipping;
               roi = ((ebayResult.price - vItem.price) / vItem.price) * 100;
+              itemsWithEbayApi++; // Item wurde erfolgreich mit eBay-API verarbeitet (mit Preis > 0)
+            } else {
+              itemsWithFallbackOnly++; // Item wurde nur mit Fallback verarbeitet (kein eBay-Preis)
             }
             
             deals.push({
@@ -225,6 +229,15 @@ export async function GET(request: Request) {
 
     const elapsedTime = Date.now() - startTime;
     console.log(`[CRON] Scan abgeschlossen: ${deals.length} Deals in ${Math.round(elapsedTime / 1000)}s`);
+    console.log(`[CRON] eBay-API-Statistiken: ${itemsWithEbayApi} mit eBay-API, ${itemsWithFallbackOnly} nur mit Fallback, ${itemsSkippedDueToTimeout} wegen Timeout übersprungen`);
+
+    // eBay-API-Statistiken für E-Mail
+    const ebayApiStats = {
+      itemsWithEbayApi,
+      itemsWithFallbackOnly,
+      itemsSkippedDueToTimeout,
+      totalItems: deals.length
+    };
 
     // E-Mail senden wenn konfiguriert
     // Prüft ob Resend API Key ODER Gmail Credentials vorhanden sind
@@ -238,7 +251,7 @@ export async function GET(request: Request) {
       console.log(`[CRON] Sende E-Mail via ${method} an "${emailConfig.to}" (Min. ROI: ${minRoiForEmail}%)...`);
       
       try {
-        emailResult = await sendArbitrageEmail(deals, emailConfig, minRoiForEmail, categoryStats);
+        emailResult = await sendArbitrageEmail(deals, emailConfig, minRoiForEmail, categoryStats, ebayApiStats);
         console.log(`[CRON] E-Mail: ${emailResult.message} (${emailResult.filteredCount} Deals mit ROI >= ${minRoiForEmail}%)`);
       } catch (emailError) {
         console.error(`[CRON] E-Mail Fehler beim Senden:`, emailError);
