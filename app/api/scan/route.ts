@@ -86,9 +86,9 @@ export async function GET(request: Request) {
     if (enabledUrlsCount === 1) {
       maxItemsPerCategory = 300; // 1 Kategorie: bis zu 300 Items
     } else if (enabledUrlsCount === 2) {
-      maxItemsPerCategory = 250; // 2 Kategorien: 250 Items pro Kategorie = 500 total (~300 pro Kategorie möglich)
+      maxItemsPerCategory = 300; // 2 Kategorien: 300 Items pro Kategorie (wie gewünscht)
     } else {
-      maxItemsPerCategory = 150; // 3+ Kategorien: 150 Items pro Kategorie
+      maxItemsPerCategory = 200; // 3+ Kategorien: 200 Items pro Kategorie
     }
     
     // Überschreibe mit Umgebungsvariable falls gesetzt (für manuelle Anpassung)
