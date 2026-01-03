@@ -9,6 +9,8 @@ import vintedUrls from '@/config/vinted-urls.json';
 // It bypasses CORS restrictions that exist in the browser.
 export async function GET(request: Request) {
   // Timeout für gesamten Request (30 Minuten - ausreichend für mehrere Kategorien)
+  // WICHTIG: Railway hat ein Timeout von ~10 Minuten für HTTP-Requests
+  // Der Request wird automatisch abgebrochen, wenn er zu lange läuft
   const requestTimeout = setTimeout(() => {
     console.error('[SCAN] KRITISCH: Request-Timeout erreicht! Der Scan läuft zu lange.');
   }, 1800000); // 30 Minuten
