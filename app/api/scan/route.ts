@@ -61,9 +61,10 @@ export async function GET(request: Request) {
       ? parseInt(maxItemsPerScanEnv, 10) 
       : 0; // 0 = kein Limit
     
-    // Timeout-Handling: Vercel hat 300s Timeout (5 Min), wir brechen bei 250s ab
+    // Timeout-Handling: Railway hat kein festes Timeout, aber wir setzen ein Limit für Stabilität
+    // Erhöht auf 600s (10 Min) für Railway, damit mehr Items verarbeitet werden können
     const startTime = Date.now();
-    const MAX_EXECUTION_TIME_MS = 250000; // 250 Sekunden (4:10 Min) - Puffer für Response
+    const MAX_EXECUTION_TIME_MS = 600000; // 600 Sekunden (10 Min) - ausreichend für ~300 Items mit 2s Delay
 
     // Für jede konfigurierte URL
     for (const urlConfig of enabledUrls) {
@@ -104,18 +105,71 @@ export async function GET(request: Request) {
         const maxConsecutiveRateLimitErrors = 5; // Nach 5 aufeinanderfolgenden Fehlern überspringe eBay API
         
         for (let i = 0; i < itemsToProcess.length; i++) {
-          // Timeout-Check: Wenn wir nahe am Timeout sind, abbrechen
+          // Timeout-Check: Berechne verbleibende Zeit
           const elapsedTime = Date.now() - startTime;
-          if (elapsedTime > MAX_EXECUTION_TIME_MS) {
-            console.warn(`Timeout nahe (${Math.round(elapsedTime/1000)}s). Breche Scan ab und gebe bisherige Ergebnisse zurück.`);
+          const remainingTime = MAX_EXECUTION_TIME_MS - elapsedTime;
+          
+          // Warnung wenn weniger als 30 Sekunden übrig sind
+          if (remainingTime < 30000 && remainingTime > 0 && i % 10 === 0) {
+            console.warn(`[SCAN] Warnung: Nur noch ${Math.round(remainingTime/1000)}s übrig. Verarbeite noch ${Math.min(10, itemsToProcess.length - i)} Items...`);
+          }
+          
+          // Abbrechen wenn Timeout erreicht (mit Puffer für Response)
+          if (elapsedTime > MAX_EXECUTION_TIME_MS - 10000) { // 10 Sekunden Puffer für Response
+            const remainingItems = itemsToProcess.length - i;
+            console.warn(`[SCAN] Timeout nahe (${Math.round(elapsedTime/1000)}s). Breche eBay-API-Calls ab. ${remainingItems} Items werden mit Fallback-URLs hinzugefügt.`);
+            
+            // Füge verbleibende Items mit Fallback-URLs hinzu (ohne eBay-API-Call)
+            for (let j = i; j < itemsToProcess.length; j++) {
+              const vItem = itemsToProcess[j];
+              let searchTitle = vItem.title;
+              if (!searchTitle || searchTitle.match(/^[\d,.\s€]+$/)) {
+                const urlMatch = vItem.url.match(/\/items\/(\d+)-([^/?]+)/);
+                if (urlMatch && urlMatch[2]) {
+                  searchTitle = decodeURIComponent(urlMatch[2].replace(/-/g, ' '));
+                } else {
+                  searchTitle = 'Artikel';
+                }
+              }
+              
+              const searchUrl = getEbaySearchUrl(searchTitle, vItem.condition);
+              deals.push({
+                id: `deal-${Date.now()}-${deals.length}`,
+                vinted: {
+                  id: `v-${deals.length}`,
+                  title: vItem.title,
+                  price: vItem.price,
+                  url: vItem.url,
+                  condition: vItem.condition,
+                  imageUrl: vItem.imageUrl || 'https://placehold.co/400?text=No+Image',
+                  category: urlConfig.category || 'Unbekannt',
+                  language: vItem.language
+                },
+                ebay: {
+                  price: 0,
+                  url: searchUrl,
+                  title: searchTitle
+                },
+                profit: 0,
+                profitAfterFees: 0,
+                roi: 0,
+                timestamp: new Date(),
+                status: 'new'
+              });
+            }
             break;
           }
           const vItem = itemsToProcess[i];
           try {
             let ebayResult = null;
             
-            // eBay API verwenden wenn konfiguriert und nicht zu viele Rate-Limit-Fehler
-            if (ebayConfig.clientId && ebayConfig.clientSecret && consecutiveRateLimitErrors < maxConsecutiveRateLimitErrors) {
+            // Prüfe ob noch genug Zeit für eBay-API-Call vorhanden ist
+            const timeForNextCall = remainingTime - (ebayApiDelay + 5000); // Delay + 5s Puffer für API-Call
+            
+            // eBay API verwenden wenn konfiguriert, nicht zu viele Rate-Limit-Fehler UND noch genug Zeit vorhanden
+            if (ebayConfig.clientId && ebayConfig.clientSecret && 
+                consecutiveRateLimitErrors < maxConsecutiveRateLimitErrors &&
+                timeForNextCall > 0) {
               // Rate Limiting: Warte zwischen API-Aufrufen um Rate-Limit zu vermeiden
               // Konfigurierbares Delay (Standard: 10000ms = 10 Sekunden = 6 Anfragen/Minute)
               if (i > 0) {

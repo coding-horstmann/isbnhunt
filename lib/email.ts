@@ -261,22 +261,43 @@ export async function sendArbitrageEmail(
     // Sicherstellen, dass minRoi eine gültige Zahl ist
     const validMinRoi = isNaN(minRoi) || minRoi <= 0 ? 150 : minRoi;
     
-    // Filtere Deals nach Min-ROI
-    const filteredDeals = deals.filter(deal => deal.roi >= validMinRoi);
+    // Filtere Deals: Zeige alle Deals mit eBay-Preis > 0 und ROI > 0
+    // Sortiere nach ROI (absteigend) für bessere Übersicht
+    let filteredDeals = deals
+      .filter(deal => deal.ebay.price > 0 && deal.roi > 0)
+      .sort((a, b) => b.roi - a.roi);
+    
+    // Wenn viele Deals vorhanden sind, zeige nur die mit ROI >= minRoi ODER die Top 50
+    if (filteredDeals.length > 50) {
+      const highRoiDeals = filteredDeals.filter(deal => deal.roi >= validMinRoi);
+      if (highRoiDeals.length > 0) {
+        // Zeige nur Deals mit hohem ROI wenn vorhanden
+        filteredDeals = highRoiDeals;
+        console.log(`[EMAIL] ${filteredDeals.length} Deals mit ROI >= ${validMinRoi}% gefunden (von ${deals.length} total)`);
+      } else {
+        // Sonst zeige Top 50 Deals
+        filteredDeals = filteredDeals.slice(0, 50);
+        console.log(`[EMAIL] Keine Deals mit ROI >= ${validMinRoi}% gefunden. Zeige Top 50 Deals (von ${deals.length} total)`);
+      }
+    } else if (filteredDeals.length > 0) {
+      console.log(`[EMAIL] ${filteredDeals.length} Deals mit eBay-Preis gefunden (von ${deals.length} total)`);
+    }
     
     // Bereinige E-Mail-Adressen
     const cleanFrom = cleanEmail(config.from);
     const cleanTo = cleanEmail(config.to);
     const cleanPassword = (config.gmailAppPassword || '').trim().replace(/[\r\n\s]/g, '');
     
-    console.log(`[EMAIL] Sende E-Mail mit ${filteredDeals.length} Deals (ROI >= ${validMinRoi}%)`);
+    console.log(`[EMAIL] Sende E-Mail mit ${filteredDeals.length} Deals (von ${deals.length} total, ROI >= ${validMinRoi}%)`);
     console.log(`[EMAIL] TO: "${cleanTo}"`);
     
     // Generiere E-Mail-Content
     const scanTime = new Date();
+    const maxRoi = filteredDeals.length > 0 ? Math.max(...filteredDeals.map(d => d.roi)).toFixed(0) : '0';
+    const minRoiShown = filteredDeals.length > 0 ? Math.min(...filteredDeals.map(d => d.roi)).toFixed(0) : '0';
     const subject = filteredDeals.length > 0 
-      ? `🎯 ${filteredDeals.length} Arbitrage-Deals gefunden (ROI ≥${validMinRoi}%)` 
-      : `📊 VintedCron Scan: Keine Deals mit ROI ≥${validMinRoi}%`;
+      ? `🎯 ${filteredDeals.length} Arbitrage-Deals gefunden (von ${deals.length} total, ROI ${minRoiShown}%-${maxRoi}%)` 
+      : `📊 VintedCron Scan: ${deals.length} Deals gefunden, aber keine mit eBay-Preis`;
     const html = generateEmailHTML(filteredDeals, scanTime, validMinRoi, categoryStats);
 
     // Prüfe ob Resend API Key vorhanden
