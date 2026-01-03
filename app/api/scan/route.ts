@@ -140,12 +140,13 @@ export async function GET(request: Request) {
         }
         
         // Für jedes Vinted Item eBay abfragen
-        // Delay optimiert für mehrere Kategorien: 1.5 Sekunden (40 requests/minute, sicher unter Limit von 60)
-        // Bei 2 Kategorien × 250 Items = 500 Items × 1.5s = ~12.5 Minuten (an der Grenze, aber machbar)
+        // Delay optimiert: 1.5 Sekunden für mehrere Kategorien, 1.8 Sekunden für eine Kategorie
+        // Berechnung: 300 Items × 1.8s = 540s = 9 Minuten (passt genau in Timeout)
+        // Bei 2 Kategorien: 300 Items × 1.5s = 450s = 7.5 Min pro Kategorie (sicher unter 9 Min)
         const ebayApiDelayEnv = process.env.EBAY_API_DELAY_MS;
         const ebayApiDelay = ebayApiDelayEnv && !isNaN(Number(ebayApiDelayEnv)) 
           ? parseInt(ebayApiDelayEnv, 10) 
-          : enabledUrlsCount > 1 ? 1500 : 2000; // 1.5s für mehrere Kategorien, 2s für eine Kategorie
+          : enabledUrlsCount > 1 ? 1500 : 1800; // 1.5s für mehrere Kategorien, 1.8s für eine Kategorie (optimiert für 9 Min Timeout)
         let consecutiveRateLimitErrors = 0;
         const maxConsecutiveRateLimitErrors = 5; // Nach 5 aufeinanderfolgenden Fehlern überspringe eBay API
         
