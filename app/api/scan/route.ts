@@ -49,11 +49,17 @@ export async function GET(request: Request) {
       }, { status: 400 });
     }
 
-    // Seitenlimit aus Umgebungsvariable oder Default (3)
-    const maxPages = parseInt(process.env.MAX_SCAN_PAGES || '3', 10);
+    // Seitenlimit aus Umgebungsvariable (mit Fallback)
+    const maxPagesEnv = process.env.MAX_SCAN_PAGES;
+    const maxPages = maxPagesEnv && !isNaN(Number(maxPagesEnv)) 
+      ? parseInt(maxPagesEnv, 10) 
+      : 3;
     
     // Item-Limit pro Scan (optional, um Timeouts zu vermeiden)
-    const maxItemsPerScan = parseInt(process.env.MAX_ITEMS_PER_SCAN || '0', 10); // 0 = kein Limit
+    const maxItemsPerScanEnv = process.env.MAX_ITEMS_PER_SCAN;
+    const maxItemsPerScan = maxItemsPerScanEnv && !isNaN(Number(maxItemsPerScanEnv)) 
+      ? parseInt(maxItemsPerScanEnv, 10) 
+      : 0; // 0 = kein Limit
     
     // Timeout-Handling: Vercel hat 300s Timeout (5 Min), wir brechen bei 250s ab
     const startTime = Date.now();
@@ -90,7 +96,10 @@ export async function GET(request: Request) {
         
         // Für jedes Vinted Item eBay abfragen
         // Delay reduziert auf 2 Sekunden (3 requests/minute, sicher unter Limit von 6)
-        const ebayApiDelay = parseInt(process.env.EBAY_API_DELAY_MS || '2000', 10); // Standard: 2000ms (2 Sekunden = 30 Anfragen/Minute, aber wir machen nur ~3)
+        const ebayApiDelayEnv = process.env.EBAY_API_DELAY_MS;
+        const ebayApiDelay = ebayApiDelayEnv && !isNaN(Number(ebayApiDelayEnv)) 
+          ? parseInt(ebayApiDelayEnv, 10) 
+          : 2000; // Standard: 2000ms (2 Sekunden = 30 Anfragen/Minute, aber wir machen nur ~3)
         let consecutiveRateLimitErrors = 0;
         const maxConsecutiveRateLimitErrors = 5; // Nach 5 aufeinanderfolgenden Fehlern überspringe eBay API
         
