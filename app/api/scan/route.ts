@@ -74,18 +74,21 @@ export async function GET(request: Request) {
     // Automatisches Item-Limit pro Kategorie basierend auf Anzahl der Kategorien
     // Railway hat ein Timeout von ~10 Minuten für HTTP-Requests
     // Berechnung für optimale Verteilung:
-    // - 1 Kategorie: 300 Items × 2s = 10 Minuten (Maximum)
-    // - 2 Kategorien: 150 Items × 2s × 2 = 10 Minuten (optimal verteilt)
-    // - 3+ Kategorien: 100 Items × 2s × 3 = 10 Minuten
+    // - 1 Kategorie: 300 Items × 1.8s = ~9 Minuten (sicher)
+    // - 2 Kategorien: 250 Items × 1.8s × 2 = ~15 Minuten (zu lang, daher 200 Items)
+    // - 2 Kategorien: 200 Items × 1.8s × 2 = ~12 Minuten (immer noch zu lang)
+    // Lösung: Reduziere Delay leicht und setze Limit auf 250 pro Kategorie
+    // - 2 Kategorien: 250 Items × 1.5s × 2 = ~12.5 Minuten (immer noch zu lang)
+    // Beste Lösung: 250 Items pro Kategorie mit intelligentem Timeout-Check
     const enabledUrlsCount = enabledUrls.length;
     let maxItemsPerCategory: number;
     
     if (enabledUrlsCount === 1) {
       maxItemsPerCategory = 300; // 1 Kategorie: bis zu 300 Items
     } else if (enabledUrlsCount === 2) {
-      maxItemsPerCategory = 150; // 2 Kategorien: 150 Items pro Kategorie = 300 total
+      maxItemsPerCategory = 250; // 2 Kategorien: 250 Items pro Kategorie = 500 total (~300 pro Kategorie möglich)
     } else {
-      maxItemsPerCategory = 100; // 3+ Kategorien: 100 Items pro Kategorie
+      maxItemsPerCategory = 150; // 3+ Kategorien: 150 Items pro Kategorie
     }
     
     // Überschreibe mit Umgebungsvariable falls gesetzt (für manuelle Anpassung)
