@@ -86,6 +86,11 @@ export async function GET(request: Request) {
     console.log(`[CRON] Scanne ${enabledUrls.length} Kategorien mit je ${maxPages} Seiten`);
 
     const categoryStats: Array<{ name: string; category: string; pagesScraped: number; itemsFound: number }> = [];
+    
+    // Tracking für eBay-API-Statistiken (wie im manuellen Scan)
+    let itemsWithEbayApi = 0;
+    let itemsWithFallbackOnly = 0;
+    let itemsSkippedDueToTimeout = 0;
 
     // Für jede konfigurierte URL
     for (const urlConfig of enabledUrls) {
