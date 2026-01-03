@@ -162,7 +162,7 @@ function generateEmailHTML(deals: ArbitrageDeal[], scanTime: Date, minRoi: numbe
               <p style="margin: 12px 0 0 0; font-size: 13px; color: #92400e;">
                 <strong>Hinweis:</strong> "Fallback-URLs" bedeutet, dass kein Preis bei eBay gefunden wurde (z.B. Artikel nicht verfügbar oder zu selten). 
                 Diese Items haben ROI 0% und werden nicht in dieser E-Mail angezeigt. 
-                Items mit eBay-Preis aber ROI &lt; ${validMinRoi}% werden ebenfalls nicht angezeigt. 
+                Items mit eBay-Preis aber ROI &lt; ${minRoi}% werden ebenfalls nicht angezeigt. 
                 Bitte überprüfe die Web-App für eine vollständige Übersicht aller gescannten Items.
               </p>
             </div>
