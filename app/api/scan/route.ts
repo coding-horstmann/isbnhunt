@@ -8,10 +8,10 @@ import vintedUrls from '@/config/vinted-urls.json';
 // This function runs on the SERVER (Node.js environment)
 // It bypasses CORS restrictions that exist in the browser.
 export async function GET(request: Request) {
-  // Timeout für gesamten Request (12 Minuten - etwas mehr als MAX_EXECUTION_TIME_MS)
+  // Timeout für gesamten Request (30 Minuten - ausreichend für mehrere Kategorien)
   const requestTimeout = setTimeout(() => {
     console.error('[SCAN] KRITISCH: Request-Timeout erreicht! Der Scan läuft zu lange.');
-  }, 720000); // 12 Minuten
+  }, 1800000); // 30 Minuten
   
   try {
     const deals: ArbitrageDeal[] = [];
@@ -72,10 +72,10 @@ export async function GET(request: Request) {
       : 0; // 0 = kein Limit
     
     // Timeout-Handling: Railway hat kein festes Timeout, aber wir setzen ein Limit für Stabilität
-    // Erhöht auf 660s (11 Min) für Railway, damit alle Items verarbeitet werden können
-    // Mit 288 Items und 2s Delay = 576s, plus Puffer = 660s
+    // Erhöht auf 30 Min für Railway, damit mehrere Kategorien verarbeitet werden können
+    // Mit 2 Kategorien à 288 Items und 2s Delay = ~19 Min, plus Puffer = 30 Min
     const startTime = Date.now();
-    const MAX_EXECUTION_TIME_MS = 660000; // 660 Sekunden (11 Min) - ausreichend für ~330 Items mit 2s Delay
+    const MAX_EXECUTION_TIME_MS = 1800000; // 1800 Sekunden (30 Min) - ausreichend für 2-3 Kategorien mit je ~300 Items
 
     // Für jede konfigurierte URL
     for (const urlConfig of enabledUrls) {
