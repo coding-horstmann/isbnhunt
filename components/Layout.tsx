@@ -40,9 +40,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       <aside className="hidden md:flex w-64 flex-col border-r border-slate-800 bg-background/50 backdrop-blur-xl fixed inset-y-0 left-0 z-50">
         <div className="p-6">
           <Link href="/" className="flex items-center gap-2">
-            <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-primary to-blue-600 flex items-center justify-center">
-              <LayoutDashboard className="h-5 w-5 text-white" />
-            </div>
+            <img src="/logo.svg" alt="VintedCron Logo" className="h-8 w-8" />
             <span className="font-bold text-lg tracking-tight">Vinted<span className="text-primary">Cron</span></span>
           </Link>
         </div>
@@ -63,7 +61,10 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
 
       {/* Mobile Header */}
       <div className="md:hidden fixed top-0 left-0 right-0 h-16 border-b border-slate-800 bg-background z-50 flex items-center justify-between px-4">
-        <Link href="/" className="font-bold">VintedCron</Link>
+        <Link href="/" className="flex items-center gap-2 font-bold">
+          <img src="/logo.svg" alt="VintedCron Logo" className="h-6 w-6" />
+          VintedCron
+        </Link>
         <button 
           onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} 
           className="p-2 text-slate-400 hover:text-slate-100 transition-colors"
