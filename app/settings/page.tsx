@@ -371,7 +371,7 @@ export default function SettingsPage() {
                   className="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-400 cursor-not-allowed"
                 />
                 <p className="text-xs text-slate-500 mt-1">
-                  Konfiguriere EBAY_CLIENT_ID und EBAY_CLIENT_SECRET in deinen Vercel Umgebungsvariablen
+                  Konfiguriere EBAY_CLIENT_ID und EBAY_CLIENT_SECRET in deinen Railway Umgebungsvariablen
                   <br />
                   Erhältlich von: <a href="https://developer.ebay.com/" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">eBay Developer Portal</a>
                 </p>
@@ -388,7 +388,7 @@ export default function SettingsPage() {
                   className="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-400 cursor-not-allowed"
                 />
                 <p className="text-xs text-slate-500 mt-1">
-                  Konfiguriere GEMINI_API_KEY in deinen Vercel Umgebungsvariablen
+                  Konfiguriere GEMINI_API_KEY in deinen Railway Umgebungsvariablen
                 </p>
               </div>
             </div>

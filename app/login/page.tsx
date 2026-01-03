@@ -101,7 +101,7 @@ export default function LoginPage() {
           </form>
 
           <p className="text-xs text-slate-500 text-center mt-6">
-            Das Passwort wird in den Vercel Umgebungsvariablen als <code className="bg-slate-900 px-1 py-0.5 rounded">APP_PASSWORD</code> gespeichert.
+            Das Passwort wird in den Railway Umgebungsvariablen als <code className="bg-slate-900 px-1 py-0.5 rounded">APP_PASSWORD</code> gespeichert.
           </p>
         </div>
       </div>
