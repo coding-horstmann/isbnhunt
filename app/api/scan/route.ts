@@ -125,7 +125,6 @@ export async function GET(request: Request) {
             console.warn(`[SCAN] Timeout nahe (${Math.round(elapsedTime/1000)}s). Breche eBay-API-Calls ab. ${remainingItems} Items werden mit Fallback-URLs hinzugefügt.`);
             
             // Füge verbleibende Items mit Fallback-URLs hinzu (ohne eBay-API-Call)
-            const remainingItems = itemsToProcess.length - i;
             itemsSkippedDueToTimeout += remainingItems;
             for (let j = i; j < itemsToProcess.length; j++) {
               const vItem = itemsToProcess[j];
