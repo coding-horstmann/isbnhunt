@@ -144,20 +144,27 @@ export async function GET(request: Request) {
         }
         
         // Für jedes Vinted Item eBay abfragen
-        // Delay optimiert: 1.5 Sekunden für mehrere Kategorien, 1.8 Sekunden für eine Kategorie
-        // Berechnung: 300 Items × 1.8s = 540s = 9 Minuten (passt genau in Timeout)
-        // Bei 2 Kategorien: 300 Items × 1.5s = 450s = 7.5 Min pro Kategorie (sicher unter 9 Min)
+        // Delay optimiert: 1.1 Sekunden für alle Fälle
+        // Berechnung: 300 Items × (1.1s Delay + 0.4s API) = 300 × 1.5s = 450s = 7.5 Minuten pro Kategorie
+        // Bei 2 Kategorien: 2 × 7.5 Min = 15 Minuten gesamt → passt genau in Railway-Limit
+        // 1.1s Delay = ~54 requests/minute (sicher unter eBay-API-Limit von 60)
         const ebayApiDelayEnv = process.env.EBAY_API_DELAY_MS;
         const ebayApiDelay = ebayApiDelayEnv && !isNaN(Number(ebayApiDelayEnv)) 
           ? parseInt(ebayApiDelayEnv, 10) 
-          : enabledUrlsCount > 1 ? 1500 : 1800; // 1.5s für mehrere Kategorien, 1.8s für eine Kategorie (optimiert für 9 Min Timeout)
+          : 1100; // 1.1s für alle Fälle (optimiert für 300 Items pro Kategorie)
         let consecutiveRateLimitErrors = 0;
         const maxConsecutiveRateLimitErrors = 5; // Nach 5 aufeinanderfolgenden Fehlern überspringe eBay API
         
         for (let i = 0; i < itemsToProcess.length; i++) {
-          // Timeout-Check PRO KATEGORIE: Berechne verbleibende Zeit für diese Kategorie
-          const elapsedTime = Date.now() - categoryStartTime;
-          const remainingTime = MAX_CATEGORY_TIME_MS - elapsedTime;
+          // Timeout-Check: Berechne verbleibende Zeit für diese Kategorie UND gesamt
+          const categoryElapsedTime = Date.now() - categoryStartTime;
+          const totalElapsedTime = Date.now() - overallStartTime;
+          const categoryRemainingTime = MAX_CATEGORY_TIME_MS - categoryElapsedTime;
+          const totalRemainingTime = MAX_TOTAL_TIME_MS - totalElapsedTime;
+          
+          // Verwende das kleinere der beiden Limits (Kategorie oder gesamt)
+          const elapsedTime = Math.max(categoryElapsedTime, totalElapsedTime);
+          const remainingTime = Math.min(categoryRemainingTime, totalRemainingTime);
           
           // Logging alle 10 Items für Debugging
           if (i % 10 === 0 || i === 0) {
