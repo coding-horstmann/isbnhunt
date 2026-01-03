@@ -104,6 +104,7 @@ export async function GET(request: Request) {
     // Wir setzen ein Limit von 9 Minuten PRO KATEGORIE, um sicher unter dem Railway-Limit zu bleiben
     // Jede Kategorie kann bis zu 9 Minuten haben, damit beide vollständig gescannt werden können
     const MAX_CATEGORY_TIME_MS = 540000; // 9 Minuten (540 Sekunden) pro Kategorie - sicher unter Railway-Limit von 10 Min
+    const overallStartTime = Date.now(); // Für Gesamt-Statistiken
 
     // Für jede konfigurierte URL
     for (const urlConfig of enabledUrls) {
