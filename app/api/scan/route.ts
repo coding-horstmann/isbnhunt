@@ -61,9 +61,11 @@ export async function GET(request: Request) {
 
     // Seitenlimit aus Umgebungsvariable (mit Fallback)
     const maxPagesEnv = process.env.MAX_SCAN_PAGES;
+    console.log(`[SCAN] MAX_SCAN_PAGES Umgebungsvariable: "${maxPagesEnv}" (Typ: ${typeof maxPagesEnv})`);
     const maxPages = maxPagesEnv && !isNaN(Number(maxPagesEnv)) 
       ? parseInt(maxPagesEnv, 10) 
       : 3;
+    console.log(`[SCAN] Verwende maxPages: ${maxPages} (Fallback verwendet: ${maxPagesEnv && !isNaN(Number(maxPagesEnv)) ? 'NEIN' : 'JA - Umgebungsvariable ungültig oder nicht gesetzt'})`);
     
     // Item-Limit pro Scan (optional, um Timeouts zu vermeiden)
     const maxItemsPerScanEnv = process.env.MAX_ITEMS_PER_SCAN;

@@ -64,10 +64,11 @@ export async function GET(request: Request) {
     
     // Seitenlimit aus Umgebungsvariable (mit Fallback)
     const maxPagesEnv = process.env.MAX_SCAN_PAGES;
+    console.log(`[CRON] MAX_SCAN_PAGES Umgebungsvariable: "${maxPagesEnv}" (Typ: ${typeof maxPagesEnv})`);
     const maxPages = maxPagesEnv && !isNaN(Number(maxPagesEnv)) 
       ? parseInt(maxPagesEnv, 10) 
       : 3;
-    
+    console.log(`[CRON] Verwende maxPages: ${maxPages} (Fallback verwendet: ${maxPagesEnv && !isNaN(Number(maxPagesEnv)) ? 'NEIN' : 'JA - Umgebungsvariable ungültig oder nicht gesetzt'})`);
     console.log(`[CRON] Konfiguration: MAX_SCAN_PAGES=${maxPages}, MIN_ROI_EMAIL=${minRoiForEmail}`);
     
     // Alle aktivierten URLs durchgehen
