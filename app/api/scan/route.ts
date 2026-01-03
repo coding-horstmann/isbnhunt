@@ -100,11 +100,12 @@ export async function GET(request: Request) {
       console.log(`[SCAN] Automatisches Item-Limit: ${maxItemsPerCategory} Items pro Kategorie (für ${enabledUrlsCount} Kategorie${enabledUrlsCount > 1 ? 'n' : ''})`);
     }
     
-    // Timeout-Handling: Railway hat kein festes Timeout, aber wir setzen ein Limit für Stabilität
-    // Erhöht auf 30 Min für Railway, damit mehrere Kategorien verarbeitet werden können
-    // Mit 2 Kategorien à 288 Items und 2s Delay = ~19 Min, plus Puffer = 30 Min
+    // Timeout-Handling: Railway hat ein Timeout von ~10 Minuten für HTTP-Requests
+    // Wir setzen ein Limit von 9 Minuten, um sicher unter dem Railway-Limit zu bleiben
+    // Mit 2 Kategorien à 250 Items und 1.5s Delay = ~12.5 Min (überschreitet Limit)
+    // Daher: Intelligenter Timeout-Check während des Scans stoppt rechtzeitig
     const startTime = Date.now();
-    const MAX_EXECUTION_TIME_MS = 1800000; // 1800 Sekunden (30 Min) - ausreichend für 2-3 Kategorien mit je ~300 Items
+    const MAX_EXECUTION_TIME_MS = 540000; // 9 Minuten (540 Sekunden) - sicher unter Railway-Limit von 10 Min
 
     // Für jede konfigurierte URL
     for (const urlConfig of enabledUrls) {
@@ -138,11 +139,12 @@ export async function GET(request: Request) {
         }
         
         // Für jedes Vinted Item eBay abfragen
-        // Delay reduziert auf 2 Sekunden (3 requests/minute, sicher unter Limit von 6)
+        // Delay optimiert für mehrere Kategorien: 1.5 Sekunden (40 requests/minute, sicher unter Limit von 60)
+        // Bei 2 Kategorien × 250 Items = 500 Items × 1.5s = ~12.5 Minuten (an der Grenze, aber machbar)
         const ebayApiDelayEnv = process.env.EBAY_API_DELAY_MS;
         const ebayApiDelay = ebayApiDelayEnv && !isNaN(Number(ebayApiDelayEnv)) 
           ? parseInt(ebayApiDelayEnv, 10) 
-          : 2000; // Standard: 2000ms (2 Sekunden = 30 Anfragen/Minute, aber wir machen nur ~3)
+          : enabledUrlsCount > 1 ? 1500 : 2000; // 1.5s für mehrere Kategorien, 2s für eine Kategorie
         let consecutiveRateLimitErrors = 0;
         const maxConsecutiveRateLimitErrors = 5; // Nach 5 aufeinanderfolgenden Fehlern überspringe eBay API
         
