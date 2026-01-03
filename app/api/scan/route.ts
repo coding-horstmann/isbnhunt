@@ -71,13 +71,14 @@ export async function GET(request: Request) {
       : 3;
     console.log(`[SCAN] Verwende maxPages: ${maxPages} (Fallback verwendet: ${maxPagesEnv && !isNaN(Number(maxPagesEnv)) && Number(maxPagesEnv) > 0 ? 'NEIN' : 'JA - Umgebungsvariable ungültig oder nicht gesetzt'})`);
     
-    // Item-Limit pro Scan (optional, um Timeouts zu vermeiden)
+    // Item-Limit pro Kategorie (optional, um Timeouts zu vermeiden)
     // WICHTIG: Railway hat ein Timeout von ~10 Minuten für HTTP-Requests
-    // Empfohlen: 50-100 Items pro Scan, um Timeouts zu vermeiden
-    const maxItemsPerScanEnv = process.env.MAX_ITEMS_PER_SCAN;
-    const maxItemsPerScan = maxItemsPerScanEnv && !isNaN(Number(maxItemsPerScanEnv)) 
-      ? parseInt(maxItemsPerScanEnv, 10) 
-      : 50; // Standard: 50 Items (statt 0) um Railway Timeouts zu vermeiden
+    // Berechnung: 2 Kategorien × 150 Items × 2s Delay = ~10 Minuten (an der Grenze)
+    // Empfohlen: 100-150 Items pro Kategorie für 2 Kategorien
+    const maxItemsPerCategoryEnv = process.env.MAX_ITEMS_PER_SCAN || process.env.MAX_ITEMS_PER_CATEGORY;
+    const maxItemsPerCategory = maxItemsPerCategoryEnv && !isNaN(Number(maxItemsPerCategoryEnv)) 
+      ? parseInt(maxItemsPerCategoryEnv, 10) 
+      : 150; // Standard: 150 Items pro Kategorie (für 2 Kategorien = 300 Items total)
     
     // Timeout-Handling: Railway hat kein festes Timeout, aber wir setzen ein Limit für Stabilität
     // Erhöht auf 30 Min für Railway, damit mehrere Kategorien verarbeitet werden können
@@ -105,13 +106,15 @@ export async function GET(request: Request) {
           itemsFound: vintedItems.length
         });
         
-        // Item-Limit anwenden falls gesetzt
-        const itemsToProcess = maxItemsPerScan > 0 
-          ? vintedItems.slice(0, maxItemsPerScan)
+        // Item-Limit pro Kategorie anwenden falls gesetzt
+        const itemsToProcess = maxItemsPerCategory > 0 
+          ? vintedItems.slice(0, maxItemsPerCategory)
           : vintedItems;
         
-        if (maxItemsPerScan > 0 && vintedItems.length > maxItemsPerScan) {
-          console.log(`Item-Limit aktiv: Verarbeite nur ${maxItemsPerScan} von ${vintedItems.length} Items`);
+        if (maxItemsPerCategory > 0 && vintedItems.length > maxItemsPerCategory) {
+          console.log(`[SCAN] Item-Limit aktiv für ${urlConfig.name}: Verarbeite nur ${maxItemsPerCategory} von ${vintedItems.length} Items`);
+        } else {
+          console.log(`[SCAN] Verarbeite alle ${vintedItems.length} Items von ${urlConfig.name}`);
         }
         
         // Für jedes Vinted Item eBay abfragen
