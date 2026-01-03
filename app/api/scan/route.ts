@@ -12,6 +12,11 @@ export async function GET(request: Request) {
     const deals: ArbitrageDeal[] = [];
     const categoryStats: Array<{ name: string; category: string; pagesScraped: number; itemsFound: number }> = [];
     
+    // Tracking für eBay-API-Statistiken
+    let itemsWithEbayApi = 0;
+    let itemsWithFallbackOnly = 0;
+    let itemsSkippedDueToTimeout = 0;
+    
     // eBay API Konfiguration aus Umgebungsvariablen (OAuth2)
     // Unterstützt sowohl EBAY_CLIENT_SECRET als auch EBAY_CERT_ID (für Kompatibilität)
     const ebayConfig = {
@@ -120,6 +125,8 @@ export async function GET(request: Request) {
             console.warn(`[SCAN] Timeout nahe (${Math.round(elapsedTime/1000)}s). Breche eBay-API-Calls ab. ${remainingItems} Items werden mit Fallback-URLs hinzugefügt.`);
             
             // Füge verbleibende Items mit Fallback-URLs hinzu (ohne eBay-API-Call)
+            const remainingItems = itemsToProcess.length - i;
+            itemsSkippedDueToTimeout += remainingItems;
             for (let j = i; j < itemsToProcess.length; j++) {
               const vItem = itemsToProcess[j];
               let searchTitle = vItem.title;
@@ -156,6 +163,7 @@ export async function GET(request: Request) {
                 timestamp: new Date(),
                 status: 'new'
               });
+              itemsWithFallbackOnly++; // Tracking: Item wurde wegen Timeout nur mit Fallback verarbeitet
             }
             break;
           }
@@ -242,6 +250,10 @@ export async function GET(request: Request) {
               profitAfterFees = ebayResult.price - vItem.price - fees - shipping;
               // ROI = einfache prozentuale Differenz zwischen eBay und Vinted (ohne Gebühren)
               roi = vItem.price > 0 ? ((ebayResult.price - vItem.price) / vItem.price) * 100 : 0;
+              itemsWithEbayApi++; // Tracking: Item wurde erfolgreich mit eBay-API verarbeitet (mit Preis > 0)
+            } else {
+              // Tracking: Item wurde nur mit Fallback verarbeitet (kein eBay-Preis)
+              itemsWithFallbackOnly++;
             }
             
             // Alle Items hinzufügen, unabhängig von Profit
@@ -292,11 +304,20 @@ export async function GET(request: Request) {
 
     const elapsedTime = Date.now() - startTime;
     console.log(`[SCAN] Gefunden: ${deals.length} Arbitrage-Möglichkeiten (Zeit: ${Math.round(elapsedTime/1000)}s)`);
+    console.log(`[SCAN] eBay-API-Statistiken: ${itemsWithEbayApi} mit eBay-API, ${itemsWithFallbackOnly} nur mit Fallback, ${itemsSkippedDueToTimeout} wegen Timeout übersprungen`);
     
     // Wenn Timeout nahe war, logge Warnung (Response bleibt Array für Kompatibilität)
     if (elapsedTime > MAX_EXECUTION_TIME_MS * 0.9) {
       console.warn('[SCAN] Scan wurde aufgrund von Timeout-Beschränkungen vorzeitig beendet. Einige Items wurden möglicherweise nicht verarbeitet.');
     }
+    
+    // eBay-API-Statistiken für E-Mail
+    const ebayApiStats = {
+      itemsWithEbayApi,
+      itemsWithFallbackOnly,
+      itemsSkippedDueToTimeout,
+      totalItems: deals.length
+    };
 
     // E-Mail senden wenn konfiguriert (eine E-Mail pro Scan)
     let emailResult = { success: false, message: 'E-Mail nicht konfiguriert', filteredCount: 0 };
@@ -323,7 +344,7 @@ export async function GET(request: Request) {
       console.log(`[SCAN] Sende E-Mail via ${method} an "${emailConfig.to}" (Min. ROI: ${minRoiForEmail}%)...`);
       
       try {
-        emailResult = await sendArbitrageEmail(deals, emailConfig, minRoiForEmail, categoryStats);
+        emailResult = await sendArbitrageEmail(deals, emailConfig, minRoiForEmail, categoryStats, ebayApiStats);
         console.log(`[SCAN] E-Mail: ${emailResult.message} (${emailResult.filteredCount} Deals mit ROI >= ${minRoiForEmail}%)`);
       } catch (emailError) {
         console.error(`[SCAN] E-Mail Fehler beim Senden:`, emailError);

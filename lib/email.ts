@@ -15,6 +15,13 @@ interface CategoryStat {
   itemsFound: number;
 }
 
+interface EbayApiStats {
+  itemsWithEbayApi: number;
+  itemsWithFallbackOnly: number;
+  itemsSkippedDueToTimeout: number;
+  totalItems: number;
+}
+
 /**
  * Bereinigt E-Mail-Adresse von ungültigen Zeichen
  */
@@ -40,7 +47,7 @@ function formatCurrency(amount: number): string {
  * Generiert HTML für die E-Mail mit Arbitrage-Deals
  * Deals werden nach ROI sortiert (höchster ROI zuerst)
  */
-function generateEmailHTML(deals: ArbitrageDeal[], scanTime: Date, minRoi: number, categoryStats?: CategoryStat[]): string {
+function generateEmailHTML(deals: ArbitrageDeal[], scanTime: Date, minRoi: number, categoryStats?: CategoryStat[], ebayApiStats?: EbayApiStats): string {
   // Sortiere Deals nach ROI (absteigend - höchster ROI zuerst)
   const sortedDeals = [...deals].sort((a, b) => b.roi - a.roi);
   
@@ -130,6 +137,35 @@ function generateEmailHTML(deals: ArbitrageDeal[], scanTime: Date, minRoi: numbe
         </div>
 
         ${categoryStatsHtml}
+
+        <!-- eBay-API-Statistiken -->
+        ${ebayApiStats && (ebayApiStats.itemsSkippedDueToTimeout > 0 || ebayApiStats.itemsWithFallbackOnly > ebayApiStats.itemsWithEbayApi) ? `
+          <div style="padding: 24px; background-color: #fef3c7; border-top: 1px solid #e5e7eb; border-bottom: 1px solid #e5e7eb;">
+            <h2 style="color: #92400e; font-size: 18px; font-weight: 600; margin: 0 0 16px 0;">⚠️ eBay-API-Hinweis</h2>
+            <div style="color: #78350f; font-size: 14px; line-height: 1.6;">
+              <p style="margin: 0 0 12px 0;">
+                <strong>Nicht alle Items konnten mit der eBay-API verarbeitet werden:</strong>
+              </p>
+              <ul style="margin: 0; padding-left: 20px;">
+                <li style="margin-bottom: 8px;">
+                  <strong>${ebayApiStats.itemsWithEbayApi}</strong> Items wurden mit eBay-API verarbeitet (mit echten Preisen)
+                </li>
+                <li style="margin-bottom: 8px;">
+                  <strong>${ebayApiStats.itemsWithFallbackOnly}</strong> Items wurden nur mit Fallback-URLs verarbeitet (ohne eBay-Preise)
+                </li>
+                ${ebayApiStats.itemsSkippedDueToTimeout > 0 ? `
+                <li style="margin-bottom: 8px;">
+                  <strong>${ebayApiStats.itemsSkippedDueToTimeout}</strong> Items wurden wegen Timeout übersprungen
+                </li>
+                ` : ''}
+              </ul>
+              <p style="margin: 12px 0 0 0; font-size: 13px; color: #92400e;">
+                <strong>Hinweis:</strong> Items ohne eBay-Preis haben ROI 0% und werden möglicherweise nicht in dieser E-Mail angezeigt. 
+                Bitte überprüfe die Web-App für eine vollständige Übersicht aller gescannten Items.
+              </p>
+            </div>
+          </div>
+        ` : ''}
 
         <!-- Deals Table -->
         <div style="padding: 24px;">
@@ -255,7 +291,8 @@ export async function sendArbitrageEmail(
   deals: ArbitrageDeal[],
   config: EmailConfig,
   minRoi: number = 150,
-  categoryStats?: CategoryStat[]
+  categoryStats?: CategoryStat[],
+  ebayApiStats?: EbayApiStats
 ): Promise<{ success: boolean; message: string; filteredCount: number }> {
   try {
     // Sicherstellen, dass minRoi eine gültige Zahl ist
@@ -298,7 +335,7 @@ export async function sendArbitrageEmail(
     const subject = filteredDeals.length > 0 
       ? `🎯 ${filteredDeals.length} Arbitrage-Deals gefunden (von ${deals.length} total, ROI ${minRoiShown}%-${maxRoi}%)` 
       : `📊 VintedCron Scan: ${deals.length} Deals gefunden, aber keine mit eBay-Preis`;
-    const html = generateEmailHTML(filteredDeals, scanTime, validMinRoi, categoryStats);
+    const html = generateEmailHTML(filteredDeals, scanTime, validMinRoi, categoryStats, ebayApiStats);
 
     // Prüfe ob Resend API Key vorhanden
     const resendApiKey = process.env.RESEND_API_KEY;
