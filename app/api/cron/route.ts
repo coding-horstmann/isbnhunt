@@ -131,6 +131,15 @@ export async function GET(request: Request) {
           const vItem = vintedItems[i];
           
           try {
+            // KRITISCH: Periodische Speicherbereinigung bei großen Batches
+            if (i > 0 && i % 50 === 0) {
+              // Force garbage collection hint (falls verfügbar)
+              if (typeof global !== 'undefined' && (global as any).gc) {
+                (global as any).gc();
+              }
+              console.log(`[CRON] Speicherbereinigung nach ${i} Items...`);
+            }
+            
             let ebayResult = null;
             
             // eBay API verwenden wenn konfiguriert

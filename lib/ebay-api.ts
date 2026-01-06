@@ -164,6 +164,7 @@ export const searchEbayByTitle = async (
 /**
  * eBay Browse API (neuere API mit OAuth2)
  * Verwendet Filter für FIXED_PRICE und NEW Condition
+ * Mit Retry-Logik bei Timeouts
  */
 async function searchWithBrowseAPI(
   title: string,
@@ -171,113 +172,137 @@ async function searchWithBrowseAPI(
   accessToken: string,
   config: EbayApiConfig
 ): Promise<EbayResult | null> {
-  try {
-    const ebayCondition = mapConditionToEbay(condition);
-    const marketplaceId = config.marketplaceId || 'EBAY_DE';
+  const MAX_RETRIES = 2;
+  let lastError: any = null;
+  
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const ebayCondition = mapConditionToEbay(condition);
+      const marketplaceId = config.marketplaceId || 'EBAY_DE';
 
-    // Filter für Buying Options und Condition zusammenstellen
-    const filters: string[] = ['buyingOptions:{FIXED_PRICE}'];
-    
-    // Versand aus Deutschland hinzufügen (nur deutsche Verkäufer)
-    filters.push('deliveryCountry:DE');
-    
-    // Condition Filter hinzufügen
-    if (ebayCondition === 'NEW') {
-      filters.push('conditions:{NEW}');
-    } else {
-      filters.push('conditions:{USED}');
-    }
-
-    // Titel für Suche verwenden (encodeURIComponent wird von axios automatisch angewendet)
-    // Aber stellen wir sicher, dass Umlaute korrekt behandelt werden
-    const searchQuery = title.trim();
-
-    // eBay Browse API Endpoint
-    // Mehr Ergebnisse abrufen, um nach deutschen Verkäufern filtern zu können
-    const response = await axios.get('https://api.ebay.com/buy/browse/v1/item_summary/search', {
-      params: {
-        q: searchQuery, // axios kodiert automatisch korrekt (inkl. Umlaute)
-        category_ids: '267', // Kategorie-ID 267 = Bücher (übergeordnete Kategorie bei eBay.de)
-        sort: 'price', // Niedrigster Preis zuerst
-        limit: '20', // Mehr Ergebnisse abrufen, um deutsche Verkäufer zu finden
-        filter: filters.join(',')
-      },
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'X-EBAY-C-MARKETPLACE-ID': marketplaceId,
-        'Content-Type': 'application/json'
-      },
-      timeout: 10000
-    });
-
-    // Prüfe ob Antwort erfolgreich ist
-    if (!response.data) {
-      return null;
-    }
-
-    const items = response.data?.itemSummaries || [];
-    
-    if (items.length === 0) {
-      return null;
-    }
-
-    // Filtere nach deutschen Verkäufern
-    const germanItems = items.filter(item => {
-      const sellerLocation = item.sellerDetail?.location || '';
-      const itemLocation = item.itemLocation?.country || '';
+      // Filter für Buying Options und Condition zusammenstellen
+      const filters: string[] = ['buyingOptions:{FIXED_PRICE}'];
       
-      // Prüfe ob Standort Deutschland ist
-      const locationLower = sellerLocation.toLowerCase();
-      return locationLower.includes('deutschland') || 
-             locationLower.includes('germany') ||
-             itemLocation === 'DE' ||
-             itemLocation === 'Germany';
-    });
-
-    // Wenn keine deutschen Verkäufer gefunden, gib null zurück
-    if (germanItems.length === 0) {
-      return null;
-    }
-
-    // Nimm das erste (günstigste) deutsche Ergebnis
-    const item = germanItems[0];
-    const price = parseFloat(item.price?.value || '0');
-    const shipping = parseFloat(item.shippingOptions?.[0]?.shippingCost?.value || '0');
-    const totalPrice = price + shipping;
-
-    if (totalPrice <= 0) {
-      return null;
-    }
-
-    return {
-      price: totalPrice,
-      url: item.itemWebUrl || '',
-      title: item.title || title,
-      shippingCost: shipping
-    };
-  } catch (error: any) {
-    // Detailliertes Logging für Debugging
-    if (error.response) {
-      const status = error.response.status;
-      const statusText = error.response.statusText;
-      const errorData = error.response.data;
+      // Versand aus Deutschland hinzufügen (nur deutsche Verkäufer)
+      filters.push('deliveryCountry:DE');
       
-      console.error(`eBay Browse API Error: ${status} - ${statusText}`);
-      
-      if (errorData) {
-        console.error('eBay API Response:', JSON.stringify(errorData).substring(0, 500));
+      // Condition Filter hinzufügen
+      if (ebayCondition === 'NEW') {
+        filters.push('conditions:{NEW}');
+      } else {
+        filters.push('conditions:{USED}');
       }
 
-      // Rate Limit Fehler erkennen
-      if (status === 429 || (errorData?.errors?.[0]?.errorId === '10001')) {
-        throw new Error('RATE_LIMIT');
+      // Titel für Suche verwenden (encodeURIComponent wird von axios automatisch angewendet)
+      // Aber stellen wir sicher, dass Umlaute korrekt behandelt werden
+      const searchQuery = title.trim();
+
+      // eBay Browse API Endpoint
+      // Mehr Ergebnisse abrufen, um nach deutschen Verkäufern filtern zu können
+      const response = await axios.get('https://api.ebay.com/buy/browse/v1/item_summary/search', {
+        params: {
+          q: searchQuery, // axios kodiert automatisch korrekt (inkl. Umlaute)
+          category_ids: '267', // Kategorie-ID 267 = Bücher (übergeordnete Kategorie bei eBay.de)
+          sort: 'price', // Niedrigster Preis zuerst
+          limit: '20', // Mehr Ergebnisse abrufen, um deutsche Verkäufer zu finden
+          filter: filters.join(',')
+        },
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'X-EBAY-C-MARKETPLACE-ID': marketplaceId,
+          'Content-Type': 'application/json'
+        },
+        timeout: 10000 // 10 Sekunden
+      });
+
+      // Prüfe ob Antwort erfolgreich ist
+      if (!response.data) {
+        return null;
       }
-    } else {
-      console.error("eBay Browse API Error:", error.message || error);
+
+      const items = response.data?.itemSummaries || [];
+      
+      if (items.length === 0) {
+        return null;
+      }
+
+      // Filtere nach deutschen Verkäufern
+      const germanItems = items.filter(item => {
+        const sellerLocation = item.sellerDetail?.location || '';
+        const itemLocation = item.itemLocation?.country || '';
+        
+        // Prüfe ob Standort Deutschland ist
+        const locationLower = sellerLocation.toLowerCase();
+        return locationLower.includes('deutschland') || 
+               locationLower.includes('germany') ||
+               itemLocation === 'DE' ||
+               itemLocation === 'Germany';
+      });
+
+      // Wenn keine deutschen Verkäufer gefunden, gib null zurück
+      if (germanItems.length === 0) {
+        return null;
+      }
+
+      // Nimm das erste (günstigste) deutsche Ergebnis
+      const item = germanItems[0];
+      const price = parseFloat(item.price?.value || '0');
+      const shipping = parseFloat(item.shippingOptions?.[0]?.shippingCost?.value || '0');
+      const totalPrice = price + shipping;
+
+      if (totalPrice <= 0) {
+        return null;
+      }
+
+      return {
+        price: totalPrice,
+        url: item.itemWebUrl || '',
+        title: item.title || title,
+        shippingCost: shipping
+      };
+    } catch (error: any) {
+      lastError = error;
+      
+      // Bei Timeout: Retry mit exponential backoff
+      if (error.code === 'ECONNABORTED' || error.message?.includes('timeout') || error.message?.includes('Timeout')) {
+        if (attempt < MAX_RETRIES) {
+          const delayMs = 1000 * (attempt + 1); // Exponential backoff: 1s, 2s
+          console.warn(`[eBay] Timeout bei Versuch ${attempt + 1}/${MAX_RETRIES + 1}, retry nach ${delayMs}ms...`);
+          await new Promise(resolve => setTimeout(resolve, delayMs));
+          continue;
+        } else {
+          console.error(`[eBay] Timeout nach ${MAX_RETRIES + 1} Versuchen für "${title.substring(0, 50)}..."`);
+          return null;
+        }
+      }
+      
+      // Bei Rate Limit: Nicht retry, sondern Error werfen (wird oben behandelt)
+      if (error.response) {
+        const status = error.response.status;
+        const errorData = error.response.data;
+        
+        if (status === 429 || (errorData?.errors?.[0]?.errorId === '10001')) {
+          throw new Error('RATE_LIMIT');
+        }
+        
+        // Bei anderen HTTP-Fehlern: Log und null zurückgeben
+        console.error(`[eBay] Browse API Error: ${status} - ${error.response.statusText}`);
+        if (errorData) {
+          console.error('[eBay] API Response:', JSON.stringify(errorData).substring(0, 500));
+        }
+        return null;
+      }
+      
+      // Bei anderen Fehlern: Log und null zurückgeben
+      console.error(`[eBay] Browse API Error (Versuch ${attempt + 1}):`, error.message || error);
+      
+      if (attempt === MAX_RETRIES) {
+        return null;
+      }
     }
-    
-    return null;
   }
+  
+  return null;
 }
 
 /**

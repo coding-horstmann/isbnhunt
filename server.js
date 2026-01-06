@@ -22,15 +22,20 @@ async function runCronJob() {
     
     console.log(`[CRON] Starte automatischen Scan via ${baseUrl}/api/cron`);
     
-    // Längeres Timeout für lange Scans (30 Minuten)
+    // KRITISCH: Explizites Timeout für den gesamten Request (25 Min unter Railway-Limit)
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30 * 60 * 1000);
+    const timeoutId = setTimeout(() => controller.abort(), 25 * 60 * 1000); // 25 Minuten
     
     const response = await fetch(`${baseUrl}/api/cron`, {
       signal: controller.signal,
       headers: {
         'Accept': 'application/json',
       },
+    }).catch(err => {
+      if (err.name === 'AbortError') {
+        throw new Error('Request timeout: Cron-Job läuft zu lange');
+      }
+      throw err;
     });
     
     clearTimeout(timeoutId);
@@ -53,7 +58,12 @@ async function runCronJob() {
       console.error(`[CRON] Fehler: ${data.error || data.message}`);
     }
   } catch (error) {
-    console.error('[CRON] Kritischer Fehler beim Ausführen des Cron-Jobs:', error);
+    // Unterscheide zwischen Timeout und anderen Fehlern
+    if (error.message?.includes('timeout') || error.message?.includes('Timeout')) {
+      console.error('[CRON] Timeout: Der Scan hat zu lange gedauert. Möglicherweise zu viele Items.');
+    } else {
+      console.error('[CRON] Kritischer Fehler beim Ausführen des Cron-Jobs:', error);
+    }
   }
 }
 

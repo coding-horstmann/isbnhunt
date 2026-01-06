@@ -528,7 +528,21 @@ async function scrapeVintedPage(url: string): Promise<{ items: any[], hasNextPag
     nextPageUrl = urlObj.toString();
   }
 
-  return { items, hasNextPage, nextPageUrl };
+  // KRITISCH: Speicher sofort freigeben nach Parsing
+  const result = { items, hasNextPage, nextPageUrl };
+  
+  // Explizit Speicher freigeben
+  // @ts-ignore - TypeScript erlaubt null assignment nicht, aber wir wissen was wir tun
+  data = null;
+  // Cheerio DOM-Baum entfernen
+  $.root().remove();
+  
+  // Force garbage collection hint (falls verfügbar)
+  if (typeof global !== 'undefined' && (global as any).gc) {
+    (global as any).gc();
+  }
+  
+  return result;
 }
 
 /**

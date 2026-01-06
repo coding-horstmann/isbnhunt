@@ -10,7 +10,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "node server.js",
+    "start": "node --max-old-space-size=450 --expose-gc server.js",
     "lint": "next lint"
   },
   "dependencies": {
