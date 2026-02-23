@@ -427,13 +427,17 @@ export async function GET(request: Request) {
 
     // E-Mail senden wenn konfiguriert (eine E-Mail pro Scan)
     let emailResult = { success: false, message: 'E-Mail nicht konfiguriert', filteredCount: 0 };
-    
+
     // E-Mail Konfiguration
     const resendApiKey = process.env.RESEND_API_KEY || '';
+
+    // Bereinige E-Mail-Adressen (entferne = am Anfang, Leerzeichen, etc.)
+    const cleanEmailEnv = (val: string | undefined) => (val || '').trim().replace(/^=+/, '').replace(/[\r\n]/g, '');
+
     const emailConfig = {
-      from: process.env.EMAIL_FROM || '',
-      to: process.env.EMAIL_TO || '',
-      gmailAppPassword: process.env.GMAIL_APP_PASSWORD || ''
+      from: cleanEmailEnv(process.env.EMAIL_FROM),
+      to: cleanEmailEnv(process.env.EMAIL_TO),
+      gmailAppPassword: (process.env.GMAIL_APP_PASSWORD || '').trim().replace(/[\r\n\s]/g, '')
     };
 
     // Min. ROI für E-Mail-Benachrichtigung (mit Fallback)

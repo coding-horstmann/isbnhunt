@@ -5,6 +5,11 @@ import { sendArbitrageEmail } from '@/lib/email';
 import { ArbitrageDeal } from '@/types';
 import vintedUrls from '@/config/vinted-urls.json';
 
+// Globales Flag um doppelte Cron-Jobs zu verhindern
+let isCronRunning = false;
+let lastCronStartTime = 0;
+const CRON_LOCK_DURATION = 30 * 60 * 1000; // 30 Minuten Sperre
+
 /**
  * CRON API Route für automatisches Scraping
  * Wird von Railway Cron-Job aufgerufen
@@ -12,14 +17,30 @@ import vintedUrls from '@/config/vinted-urls.json';
  */
 export async function GET(request: Request) {
   const startTime = Date.now();
-  
+
+  // Prüfe ob bereits ein Cron-Job läuft (Race-Condition-Schutz)
+  if (isCronRunning && (Date.now() - lastCronStartTime) < CRON_LOCK_DURATION) {
+    const elapsedSeconds = Math.round((Date.now() - lastCronStartTime) / 1000);
+    console.log(`[CRON] Bereits ein Cron-Job aktiv (läuft seit ${elapsedSeconds}s). Überspringe diesen Aufruf.`);
+    return NextResponse.json({
+      success: false,
+      skipped: true,
+      message: `Cron-Job bereits aktiv (läuft seit ${elapsedSeconds}s)`
+    });
+  }
+
+  // Setze Lock
+  isCronRunning = true;
+  lastCronStartTime = Date.now();
+
   try {
     // Zeitprüfung: Nur zwischen 8 und 21 Uhr (deutsche Zeit) ausführen
     const now = new Date();
     const germanTime = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Berlin' }));
     const currentHour = germanTime.getHours();
-    
+
     if (currentHour < 8 || currentHour >= 21) {
+      isCronRunning = false; // Lock freigeben
       return NextResponse.json({
         success: false,
         message: `Cron-Job läuft nur zwischen 8:00 und 21:00 Uhr. Aktuelle Zeit: ${germanTime.toLocaleTimeString('de-DE')}`,
@@ -46,15 +67,19 @@ export async function GET(request: Request) {
     // E-Mail Konfiguration
     // Resend API (empfohlen für Cloud-Hosting) oder Gmail SMTP (Fallback)
     const resendApiKey = process.env.RESEND_API_KEY || '';
+
+    // Bereinige E-Mail-Adressen (entferne = am Anfang, Leerzeichen, etc.)
+    const cleanEmailEnv = (val: string | undefined) => (val || '').trim().replace(/^=+/, '').replace(/[\r\n]/g, '');
+
     const emailConfig = {
-      from: process.env.EMAIL_FROM || '',
-      to: process.env.EMAIL_TO || '',
-      gmailAppPassword: process.env.GMAIL_APP_PASSWORD || ''
+      from: cleanEmailEnv(process.env.EMAIL_FROM),
+      to: cleanEmailEnv(process.env.EMAIL_TO),
+      gmailAppPassword: (process.env.GMAIL_APP_PASSWORD || '').trim().replace(/[\r\n\s]/g, '')
     };
 
     // Debug: Log E-Mail Config Status
     const emailMethod = resendApiKey ? 'Resend API' : (emailConfig.gmailAppPassword ? 'Gmail SMTP' : 'NICHT KONFIGURIERT');
-    console.log(`[CRON] E-Mail Config: Methode=${emailMethod}, TO=${emailConfig.to ? 'gesetzt' : 'FEHLT'}`);
+    console.log(`[CRON] E-Mail Config: Methode=${emailMethod}, TO=${emailConfig.to ? `"${emailConfig.to}"` : 'FEHLT'}`);
 
     // Min. ROI für E-Mail-Benachrichtigung (mit Fallback)
     const minRoiEnv = process.env.MIN_ROI_EMAIL;
@@ -289,11 +314,15 @@ export async function GET(request: Request) {
     
   } catch (error) {
     console.error('[CRON] Kritischer Fehler:', error);
-    return NextResponse.json({ 
+    return NextResponse.json({
       success: false,
-      error: 'Cron-Job fehlgeschlagen', 
+      error: 'Cron-Job fehlgeschlagen',
       details: error instanceof Error ? error.message : 'Unbekannter Fehler'
     }, { status: 500 });
+  } finally {
+    // Lock freigeben
+    isCronRunning = false;
+    console.log('[CRON] Lock freigegeben, Cron-Job beendet');
   }
 }
 
