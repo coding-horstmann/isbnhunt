@@ -136,6 +136,10 @@ function generateEmailHTML(deals: ArbitrageDeal[], scanTime: Date, minRoi: numbe
             <div style="font-size: 28px; font-weight: 700; color: #3b82f6;">≥${minRoi}%</div>
             <div style="font-size: 12px; color: #6b7280;">Min. ROI</div>
           </div>
+          <div style="text-align: center;">
+            <div style="font-size: 28px; font-weight: 700; color: #8b5cf6;">≥14,99€</div>
+            <div style="font-size: 12px; color: #6b7280;">Min. eBay-Preis</div>
+          </div>
         </div>
 
         ${categoryStatsHtml}
@@ -190,7 +194,7 @@ function generateEmailHTML(deals: ArbitrageDeal[], scanTime: Date, minRoi: numbe
             </table>
           ` : `
             <div style="text-align: center; padding: 48px; color: #6b7280;">
-              <p style="font-size: 16px;">Keine Deals mit ROI ≥ ${minRoi}% gefunden.</p>
+              <p style="font-size: 16px;">Keine Deals mit ROI ≥ ${minRoi}% und eBay-Preis ≥ 14,99 € gefunden.</p>
               <p style="font-size: 14px;">Der nächste Scan läuft automatisch in 2 Stunden.</p>
             </div>
           `}
@@ -301,14 +305,17 @@ export async function sendArbitrageEmail(
   try {
     // Sicherstellen, dass minRoi eine gültige Zahl ist
     const validMinRoi = isNaN(minRoi) || minRoi <= 0 ? 150 : minRoi;
-    
-    // Filtere Deals: Zeige NUR Deals mit eBay-Preis > 0 und ROI >= minRoi
+
+    // Mindest-Preis für eBay-Verkaufspreis (Standard: 14.99 EUR)
+    const minEbayPrice = parseFloat(process.env.MIN_EBAY_PRICE || '14.99') || 14.99;
+
+    // Filtere Deals: Zeige NUR Deals mit eBay-Preis >= minEbayPrice und ROI >= minRoi
     // Sortiere nach ROI (absteigend) für bessere Übersicht
     let filteredDeals = deals
-      .filter(deal => deal.ebay.price > 0 && deal.roi >= validMinRoi)
+      .filter(deal => deal.ebay.price >= minEbayPrice && deal.roi >= validMinRoi)
       .sort((a, b) => b.roi - a.roi);
-    
-    console.log(`[EMAIL] ${filteredDeals.length} Deals mit ROI >= ${validMinRoi}% gefunden (von ${deals.length} total)`);
+
+    console.log(`[EMAIL] ${filteredDeals.length} Deals mit ROI >= ${validMinRoi}% und eBay-Preis >= ${minEbayPrice}EUR gefunden (von ${deals.length} total)`);
     
     // Wenn keine Deals mit hohem ROI gefunden wurden, zeige Info
     if (filteredDeals.length === 0) {
@@ -324,7 +331,7 @@ export async function sendArbitrageEmail(
     const cleanTo = cleanEmail(config.to);
     const cleanPassword = (config.gmailAppPassword || '').trim().replace(/[\r\n\s]/g, '');
     
-    console.log(`[EMAIL] Sende E-Mail mit ${filteredDeals.length} Deals (von ${deals.length} total, ROI >= ${validMinRoi}%)`);
+    console.log(`[EMAIL] Sende E-Mail mit ${filteredDeals.length} Deals (von ${deals.length} total, ROI >= ${validMinRoi}%, eBay >= ${minEbayPrice}EUR)`);
     console.log(`[EMAIL] TO: "${cleanTo}"`);
     
     // Generiere E-Mail-Content
